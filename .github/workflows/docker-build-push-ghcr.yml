@@ -55,7 +55,8 @@ jobs:
       - name: Copy env
         run: |
           grep -o '^[^#]*' .env.example > .env
-          cat .env >> $GITHUB_ENV
+          # Strip quotes from values before adding to GITHUB_ENV
+          sed -E "s/^([^=]+)=[\"']?([^\"']*)[\"']?$/\1=\2/" .env >> $GITHUB_ENV
           echo "DATABASE_HOST=localhost:5432" >> $GITHUB_ENV
           eval $(sed -e '/^#/d' -e 's/^/export /' -e 's/$/;/' .env) ;
 
