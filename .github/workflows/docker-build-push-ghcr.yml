@@ -57,7 +57,11 @@ jobs:
           grep -o '^[^#]*' .env.example > .env
           # Strip quotes from values before adding to GITHUB_ENV
           sed -E "s/^([^=]+)=[\"']?([^\"']*)[\"']?$/\1=\2/" .env >> $GITHUB_ENV
+          # Set database connection vars (matching docker-compose.yml database service)
           echo "DATABASE_HOST=localhost:5432" >> $GITHUB_ENV
+          echo "POSTGRES_USER=unicorn_user" >> $GITHUB_ENV
+          echo "POSTGRES_PASSWORD=magical_password" >> $GITHUB_ENV
+          echo "POSTGRES_DB=calendso" >> $GITHUB_ENV
           eval $(sed -e '/^#/d' -e 's/^/export /' -e 's/$/;/' .env) ;
 
       - name: Start database
@@ -135,6 +139,7 @@ jobs:
 
           docker run --rm --network stack \
             -p 3000:3000 \
+            -e DATABASE_HOST=database:5432 \
             -e DATABASE_URL=postgresql://${{ env.POSTGRES_USER }}:${{ env.POSTGRES_PASSWORD }}@database/${{ env.POSTGRES_DB }} \
             -e DATABASE_DIRECT_URL=postgresql://${{ env.POSTGRES_USER }}:${{ env.POSTGRES_PASSWORD }}@database/${{ env.POSTGRES_DB }} \
             -e NEXTAUTH_SECRET=${{ env.NEXTAUTH_SECRET }} \
