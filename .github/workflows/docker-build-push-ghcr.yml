@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - 'main'
+      - 'feature/**'
     tags:
       - 'v*'
   workflow_run:
@@ -50,7 +51,14 @@ jobs:
           images: |
             ghcr.io/oleg-rom/cal.com-fork
           tags: |
-            type=sha,format=long
+            type=sha,format=long,prefix=sha-,priority=100
+            type=ref,event=branch,prefix=branch-,priority=200
+            type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/v') }},priority=300
+            type=semver,pattern={{major}}.{{minor}},enable=${{ startsWith(github.ref, 'refs/tags/v') }},priority=300
+          labels: |
+            org.opencontainers.image.title=Cal.com Fork
+            org.opencontainers.image.description=Custom Cal.com fork with Stripe enhancements
+            org.opencontainers.image.vendor=oleg-rom
 
       - name: Copy env
         run: |
