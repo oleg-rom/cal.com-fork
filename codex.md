@@ -112,3 +112,64 @@ When proposing or executing changes, Codex must:
 - Confirm whether changes target `main` or a feature branch, and why.
 - Confirm CI-built image traceability (commit SHA → GHCR tag).
 - Identify any downstream deploy repo updates required (without implementing them unless asked).
+
+---
+
+## 11) Session Log: Docker Build CI Fixes (2026-01-16)
+
+### Goal
+Get the Docker image build workflow (`.github/workflows/docker-build-push-ghcr.yml`) to successfully build and push images to GHCR.
+
+### Commits Made (on `main` — fork maintenance, not app features)
+
+1. **`e78c24e32`** — `fix(ci): strip quotes from env values in Docker build workflow`
+   - **Problem:** `.env.example` contains quoted values like `NEXT_PUBLIC_API_V2_URL="http://localhost:5555/api/v2"`. When copied to `GITHUB_ENV`, quotes became part of the value, causing Next.js rewrite validation to fail with "Invalid rewrite found".
+   - **Fix:** Changed `cat .env >> $GITHUB_ENV` to use sed to strip quotes:
+     ```bash
+     sed -E "s/^([^=]+)=[\"']?([^\"']*)[\"']?$/\1=\2/" .env >> $GITHUB_ENV
+     ```
+
+2. **`b0b2e57f4`** — `fix(ci): add missing database env vars for runtime test`
+   - **Problem:** The "Test runtime" step failed because:
+     - `scripts/start.sh` calls `scripts/wait-for-it.sh ${DATABASE_HOST}` but `DATABASE_HOST` wasn't set
+     - Prisma migration failed with "User was denied access" because `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` weren't in `GITHUB_ENV`
+   - **Fix:** Added to "Copy env" step:
+     ```bash
+     echo "POSTGRES_USER=unicorn_user" >> $GITHUB_ENV
+     echo "POSTGRES_PASSWORD=magical_password" >> $GITHUB_ENV
+     echo "POSTGRES_DB=calendso" >> $GITHUB_ENV
+     ```
+   - Added to docker run command:
+     ```bash
+     -e DATABASE_HOST=database:5432 \
+     ```
+
+### Current State — ✅ SUCCESS (2026-01-17)
+- **Build succeeded**: Run ID `21092546534`
+- **Image pushed**: `ghcr.io/oleg-rom/cal.com-fork:sha-b0b2e57f41011ab8fc8f5a1bc004d78ef4bf912c`
+- Workflow URL: https://github.com/oleg-rom/cal.com-fork/actions
+
+### Key Files
+- Workflow: `.github/workflows/docker-build-push-ghcr.yml`
+- Dockerfile: `./Dockerfile` (multi-stage: builder → builder-two → runner)
+- Start script: `scripts/start.sh` (runs migrations, seeds app store, starts Next.js)
+- Env template: `.env.example`
+
+### Build Process Overview
+1. Workflow triggers on push to `main`, version tags, or manual dispatch
+2. Starts postgres container from `docker-compose.yml`
+3. Builds image with build args from `.env.example`
+4. Tests runtime by starting container and health-checking `/auth/login`
+5. Pushes to `ghcr.io/oleg-rom/cal.com-fork:sha-<full-commit-sha>`
+
+### Known Issues Fixed
+| Issue | Root Cause | Fix Commit |
+|-------|-----------|------------|
+| "Invalid rewrite found" | Quoted env values in GITHUB_ENV | `e78c24e32` |
+| "you need to provide a host and port" | Missing DATABASE_HOST | `b0b2e57f4` |
+| "User was denied access on database" | Missing POSTGRES_* vars | `b0b2e57f4` |
+| "permission_denied: write_package" | GHCR package not linked to repo | Manual fix in GitHub UI |
+
+### Additional Fixes (2026-01-17)
+- **GHCR permissions**: Added repository write access to the package via GitHub UI (Package Settings → Manage Actions access)
+- **Disabled cron workflows**: All upstream Cal.com cron jobs disabled via `gh workflow disable` (they require `APP_URL` and `CRON_API_KEY` secrets not needed for this fork)

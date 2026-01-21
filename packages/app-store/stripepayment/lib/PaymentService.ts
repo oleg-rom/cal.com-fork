@@ -170,7 +170,7 @@ class StripePaymentService implements IAbstractPaymentService {
 
       const params = {
         customer: customer.id,
-        payment_method_types: ["card"] as const,
+        payment_method_types: ["card"],
         metadata: {
           bookingId,
           bookerPhoneNumber: bookerPhoneNumber ?? null,
