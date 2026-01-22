@@ -76,6 +76,17 @@ export const getServerSideProps = async (context: GetServerSidePropsContext) => 
     };
   }
 
+  // If payment has a Stripe Checkout URL, redirect to it for hosted checkout with tax support
+  const checkoutSessionUrl = payment.data?.checkoutSessionUrl as string | undefined;
+  if (checkoutSessionUrl && !payment.success) {
+    return {
+      redirect: {
+        destination: checkoutSessionUrl,
+        permanent: false,
+      },
+    };
+  }
+
   return {
     props: {
       user,

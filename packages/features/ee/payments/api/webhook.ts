@@ -182,6 +182,43 @@ const handleSetupSuccess = async (
   }
 };
 
+/**
+ * Handle Stripe Checkout Session completion (used for hosted checkout with tax support)
+ */
+async function handleCheckoutSessionCompleted(
+  event: Stripe.Event,
+  traceContext: TraceContext
+) {
+  const session = event.data.object as Stripe.Checkout.Session;
+
+  // Find payment by checkout session ID
+  const payment = await prisma.payment.findFirst({
+    where: {
+      externalId: session.id,
+    },
+    select: {
+      id: true,
+      bookingId: true,
+    },
+  });
+
+  if (!payment?.bookingId) {
+    log.error(
+      "Stripe: Checkout Session Payment Not Found",
+      safeStringify(session),
+      safeStringify(payment)
+    );
+    throw new HttpCode({ statusCode: 204, message: "Payment not found" });
+  }
+
+  await handlePaymentSuccess({
+    paymentId: payment.id,
+    bookingId: payment.bookingId,
+    appSlug: "stripe",
+    traceContext,
+  });
+}
+
 type WebhookHandler = (
   event: Stripe.Event,
   traceContext: TraceContext
@@ -190,6 +227,7 @@ type WebhookHandler = (
 const webhookHandlers: Record<string, WebhookHandler | undefined> = {
   "payment_intent.succeeded": handleStripePaymentSuccess,
   "setup_intent.succeeded": handleSetupSuccess,
+  "checkout.session.completed": handleCheckoutSessionCompleted,
 };
 
 /**
@@ -253,9 +291,11 @@ export default async function handler(
       },
     });
 
-    // bypassing this validation for e2e tests
-    // in order to successfully confirm the payment
-    if (!event.account && !process.env.NEXT_PUBLIC_IS_E2E) {
+    // In connected account mode, only process webhooks from connected accounts (event.account is set).
+    // In direct mode (STRIPE_DIRECT_MODE=true), process webhooks from the main account (event.account is undefined).
+    // Bypass this validation for e2e tests.
+    const isDirectMode = process.env.STRIPE_DIRECT_MODE === "true";
+    if (!event.account && !isDirectMode && !process.env.NEXT_PUBLIC_IS_E2E) {
       throw new HttpCode({
         statusCode: 202,
         message: "Incoming connected account",

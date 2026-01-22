@@ -5,6 +5,7 @@ import z from "zod";
 import dayjs from "@calcom/dayjs";
 import { BookingRepository } from "@calcom/features/bookings/repositories/BookingRepository";
 import tasker from "@calcom/features/tasker";
+import { WEBAPP_URL } from "@calcom/lib/constants";
 import { ErrorCode } from "@calcom/lib/errorCodes";
 import { ErrorWithCode } from "@calcom/lib/errors";
 import logger from "@calcom/lib/logger";
@@ -88,12 +89,31 @@ class StripePaymentService implements IAbstractPaymentService {
         bookerPhoneNumber
       );
 
-      const params: Stripe.PaymentIntentCreateParams = {
-        amount: payment.amount,
-        currency: payment.currency,
+      // Generate a unique payment ID for tracking
+      const paymentUid = uuidv4();
+
+      // Create Checkout Session for Stripe hosted page with tax support
+      const checkoutSession = await this.stripe.checkout.sessions.create({
+        mode: "payment",
         customer: customer.id,
-        automatic_payment_methods: {
+        line_items: [
+          {
+            price_data: {
+              currency: payment.currency,
+              unit_amount: payment.amount,
+              product_data: {
+                name: bookingTitle || eventTitle || "Booking Payment",
+                description: `Booking with ${username || "host"}`,
+              },
+            },
+            quantity: 1,
+          },
+        ],
+        automatic_tax: {
           enabled: true,
+        },
+        customer_update: {
+          address: "auto",
         },
         metadata: this.generateMetadata({
           bookingId,
@@ -104,14 +124,15 @@ class StripePaymentService implements IAbstractPaymentService {
           bookerPhoneNumber: bookerPhoneNumber ?? null,
           eventTitle: eventTitle || "",
           bookingTitle: bookingTitle || "",
+          paymentUid, // Include payment UID for webhook processing
         }),
-      };
-
-      const paymentIntent = await this.stripe.paymentIntents.create(params);
+        success_url: `${WEBAPP_URL}/booking/${bookingId}?paymentStatus=success`,
+        cancel_url: `${WEBAPP_URL}/payment/${paymentUid}?paymentStatus=cancelled`,
+      });
 
       const paymentData = await prisma.payment.create({
         data: {
-          uid: uuidv4(),
+          uid: paymentUid,
           app: {
             connect: {
               slug: "stripe",
@@ -124,10 +145,12 @@ class StripePaymentService implements IAbstractPaymentService {
           },
           amount: payment.amount,
           currency: payment.currency,
-          externalId: paymentIntent.id,
-          data: Object.assign({}, paymentIntent, {
+          externalId: checkoutSession.id,
+          data: {
+            checkoutSessionId: checkoutSession.id,
+            checkoutSessionUrl: checkoutSession.url,
             stripe_publishable_key: STRIPE_PUBLIC_KEY,
-          }) as unknown as Prisma.InputJsonValue,
+          } as unknown as Prisma.InputJsonValue,
           fee: 0,
           refunded: false,
           success: false,
@@ -436,6 +459,7 @@ class StripePaymentService implements IAbstractPaymentService {
     bookerPhoneNumber,
     eventTitle,
     bookingTitle,
+    paymentUid,
   }: {
     bookingId: number;
     userId: number | null | undefined;
@@ -445,6 +469,7 @@ class StripePaymentService implements IAbstractPaymentService {
     bookerPhoneNumber: string | null;
     eventTitle: string | null;
     bookingTitle: string;
+    paymentUid?: string;
   }) {
     return {
       identifier: "cal.com",
@@ -456,6 +481,7 @@ class StripePaymentService implements IAbstractPaymentService {
       bookerPhoneNumber: bookerPhoneNumber ?? null,
       eventTitle: eventTitle || "",
       bookingTitle: bookingTitle || "",
+      ...(paymentUid && { paymentUid }),
     };
   }
 }
