@@ -112,3 +112,56 @@ When proposing or executing changes, Codex must:
 - Confirm whether changes target `main` or a feature branch, and why.
 - Confirm CI-built image traceability (commit SHA → GHCR tag).
 - Identify any downstream deploy repo updates required (without implementing them unless asked).
+
+---
+
+## Session Log: Stripe Direct Account Feature (2026-01-22)
+
+### Goal
+Enable PayPal and all Stripe payment methods by switching from Stripe Connect (connected accounts) to direct Stripe account integration.
+
+### Background
+- Cal.com's default Stripe integration uses Stripe Connect (OAuth flow with connected accounts)
+- PayPal was rejected on the connected account ("your application did not meet paypal's criteria")
+- PayPal works fine on the main/platform Stripe account
+- Solution: Modify code to use main Stripe account directly instead of connected accounts
+
+### Branch
+`feature/stripe-direct-account` — custom app feature, per codex.md rules
+
+### Commits
+
+1. **`d60256806`** — `feat(stripe): use direct Stripe account instead of Connect`
+   - **Files changed:**
+     - `packages/app-store/stripepayment/lib/PaymentService.ts`
+     - `packages/app-store/stripepayment/lib/customer.ts`
+     - `packages/app-store/stripepayment/lib/server.ts`
+   - **Changes:**
+     - Removed all `stripeAccount` parameters from Stripe API calls
+     - Updated `retrieveOrCreateStripeCustomerByEmail()` to not require `stripeAccountId`
+     - Removed `stripeAccount` from `StripePaymentData` type
+     - Made `stripe_user_id` optional in credential schema (backward compatibility)
+   - **Build:** ✅ Success (Run ID `21242635968`)
+
+2. **`96a499867`** — `fix(stripe): remove STRIPE_CLIENT_ID requirement for direct mode`
+   - **Files changed:**
+     - `packages/app-store/stripepayment/_metadata.ts`
+   - **Changes:**
+     - Removed `STRIPE_CLIENT_ID` from the `installed` check
+     - App now shows as installed with only `STRIPE_PRIVATE_KEY` and `NEXT_PUBLIC_STRIPE_PUBLIC_KEY`
+   - **Build:** In progress (Run ID `21245150524`)
+
+### Build Status
+- **Latest build:** Run ID `21245150524`
+- **Status:** In progress
+- **Expected image tag:** `ghcr.io/oleg-rom/cal.com-fork:sha-96a499867...`
+
+### Environment Variables for Deployment
+When using this feature branch, configure these env vars with your **main** Stripe account (not connected):
+- `STRIPE_PRIVATE_KEY` — Main account secret key (`sk_live_...` or `sk_test_...`) — **Required**
+- `NEXT_PUBLIC_STRIPE_PUBLIC_KEY` — Main account publishable key (`pk_live_...` or `pk_test_...`) — **Required**
+- `STRIPE_WEBHOOK_SECRET` — Webhook secret for main account (`whsec_...`) — **Required for webhooks**
+- `STRIPE_CLIENT_ID` — **Not needed** (only used for Connect OAuth, can be omitted)
+
+### Related Previous Work
+- `feature/stripe-all-payment-methods` branch — Earlier attempt that kept Connect but enabled `automatic_payment_methods`. PayPal still didn't work due to connected account restrictions.
