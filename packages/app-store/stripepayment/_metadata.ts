@@ -6,7 +6,6 @@ export const metadata = {
   name: "Stripe",
   description: _package.description,
   installed: !!(
-    process.env.STRIPE_CLIENT_ID &&
     process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY &&
     process.env.STRIPE_PRIVATE_KEY
   ),
