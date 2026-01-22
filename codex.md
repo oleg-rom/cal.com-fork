@@ -149,18 +149,56 @@ Enable PayPal and all Stripe payment methods by switching from Stripe Connect (c
    - **Changes:**
      - Removed `STRIPE_CLIENT_ID` from the `installed` check
      - App now shows as installed with only `STRIPE_PRIVATE_KEY` and `NEXT_PUBLIC_STRIPE_PUBLIC_KEY`
-   - **Build:** In progress (Run ID `21245150524`)
+   - **Build:** ✅ Success (Run ID `21245150524`, 30m6s)
+
+3. **`a048883d0`** — `fix(stripe): use platform public key for payment form`
+   - **Files changed:**
+     - `packages/app-store/stripepayment/lib/PaymentService.ts`
+   - **Changes:**
+     - Use `NEXT_PUBLIC_STRIPE_PUBLIC_KEY` from environment instead of credential's `stripe_publishable_key`
+     - Made `stripe_publishable_key` optional in credential schema
+     - Fixes payment window not opening (wrong publishable key was being passed to Stripe.js)
+   - **Build:** ✅ Success (included in Run ID `21254678834`)
+
+4. **`130e7f8f5`** — `ci: add concurrency control to prevent duplicate builds`
+   - **Files changed:**
+     - `.github/workflows/docker-build-push-ghcr.yml`
+   - **Changes:**
+     - Added concurrency group to cancel older workflow runs when a new push happens
+     - Prevents wasteful duplicate builds
+   - **Build:** ✅ Success (Run ID `21254678834`, 30m7s)
+
+5. **`800642688`** — `feat(stripe): use Stripe Checkout for payments with automatic tax support`
+   - **Files changed:**
+     - `packages/app-store/stripepayment/lib/PaymentService.ts`
+     - `packages/features/ee/payments/api/webhook.ts`
+     - `packages/features/ee/payments/pages/payment.tsx`
+   - **Changes:**
+     - Switched from embedded Payment Element to Stripe hosted Checkout page
+     - Added `automatic_tax: { enabled: true }` for Stripe Tax support
+     - Payment page now redirects to Stripe Checkout URL
+     - Added webhook handler for `checkout.session.completed` event
+     - Added `STRIPE_DIRECT_MODE` env var for webhook processing in direct mode
+   - **Build:** ✅ Success (Run ID `21256214648`, 32m21s)
 
 ### Build Status
-- **Latest build:** Run ID `21245150524`
-- **Status:** In progress
-- **Expected image tag:** `ghcr.io/oleg-rom/cal.com-fork:sha-96a499867...`
+- **Latest build:** Run ID `21256214648` (commit `800642688`)
+- **Status:** ✅ Success
+- **Image tag:** `ghcr.io/oleg-rom/cal.com-fork:sha-800642688`
+
+### Testing Results
+- ✅ Payment form opens correctly
+- ✅ Stripe Checkout page loads with all payment methods
+- ✅ PayPal works on Stripe Checkout
+- ✅ Automatic tax calculation works (Stripe Tax)
+- ✅ Webhooks processed correctly in direct mode
 
 ### Environment Variables for Deployment
 When using this feature branch, configure these env vars with your **main** Stripe account (not connected):
 - `STRIPE_PRIVATE_KEY` — Main account secret key (`sk_live_...` or `sk_test_...`) — **Required**
 - `NEXT_PUBLIC_STRIPE_PUBLIC_KEY` — Main account publishable key (`pk_live_...` or `pk_test_...`) — **Required**
 - `STRIPE_WEBHOOK_SECRET` — Webhook secret for main account (`whsec_...`) — **Required for webhooks**
+- `STRIPE_DIRECT_MODE=true` — **Required** for webhook processing in direct mode
 - `STRIPE_CLIENT_ID` — **Not needed** (only used for Connect OAuth, can be omitted)
 
 ### Related Previous Work
