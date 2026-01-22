@@ -22,10 +22,13 @@ import type { StripeSetupIntentData } from "./server";
 
 const log = logger.getSubLogger({ prefix: ["payment-service:stripe"] });
 
+// In direct mode, use the platform's public key from environment
+const STRIPE_PUBLIC_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLIC_KEY || "";
+
 export const stripeCredentialKeysSchema = z.object({
   stripe_user_id: z.string().optional(), // Optional for backward compatibility, not used in direct mode
   default_currency: z.string(),
-  stripe_publishable_key: z.string(),
+  stripe_publishable_key: z.string().optional(), // Optional, we use NEXT_PUBLIC_STRIPE_PUBLIC_KEY in direct mode
 });
 
 class StripePaymentService implements IAbstractPaymentService {
@@ -123,7 +126,7 @@ class StripePaymentService implements IAbstractPaymentService {
           currency: payment.currency,
           externalId: paymentIntent.id,
           data: Object.assign({}, paymentIntent, {
-            stripe_publishable_key: this.credentials.stripe_publishable_key,
+            stripe_publishable_key: STRIPE_PUBLIC_KEY,
           }) as unknown as Prisma.InputJsonValue,
           fee: 0,
           refunded: false,
@@ -194,7 +197,7 @@ class StripePaymentService implements IAbstractPaymentService {
             {},
             {
               setupIntent,
-              stripe_publishable_key: this.credentials.stripe_publishable_key,
+              stripe_publishable_key: STRIPE_PUBLIC_KEY,
             }
           ) as unknown as Prisma.InputJsonValue,
           fee: 0,
