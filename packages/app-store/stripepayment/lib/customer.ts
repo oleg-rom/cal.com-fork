@@ -81,29 +81,21 @@ export async function deleteStripeCustomer(user: UserType): Promise<string | nul
 }
 
 export async function retrieveOrCreateStripeCustomerByEmail(
-  stripeAccountId: string,
   email: string,
   phoneNumber?: string | null
 ) {
-  const customer = await stripe.customers.list(
-    {
-      email,
-      limit: 1,
-    },
-    {
-      stripeAccount: stripeAccountId,
-    }
-  );
+  const customer = await stripe.customers.list({
+    email,
+    limit: 1,
+  });
 
   if (customer.data[0]?.id) {
     return customer.data[0];
   } else {
-    const newCustomer = await stripe.customers.create(
-      { email, phone: phoneNumber ?? undefined },
-      {
-        stripeAccount: stripeAccountId,
-      }
-    );
+    const newCustomer = await stripe.customers.create({
+      email,
+      phone: phoneNumber ?? undefined,
+    });
     return newCustomer;
   }
 }

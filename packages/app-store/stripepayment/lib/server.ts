@@ -3,7 +3,6 @@ import { z } from "zod";
 
 export type StripePaymentData = Stripe.Response<Stripe.PaymentIntent> & {
   stripe_publishable_key: string;
-  stripeAccount: string;
 };
 
 export type StripeSetupIntentData = {
