@@ -16,6 +16,11 @@ on:
       - completed
   workflow_dispatch:
 
+# Prevent duplicate runs on same branch - cancel older runs when new one starts
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
