@@ -11,7 +11,7 @@
   "calcom_explained_new_user": "Dokončite nastavenie svojho {{appName}} účtu! Ste už iba niekoľko krokov od vyriešenia všetkých svojich problémov s plánovaním.",
   "have_any_questions": "Máte otázky? Sme tu, aby sme vám pomohli.",
   "reset_password_subject": "{{appName}}: Pokyny pre obnovenie hesla",
-  "verify_email_subject": "{{appName}}: Overte svoj účet",
+  "verify_email_subject": "{{appName}}: подтвердите адрес эл. почты",
   "check_your_email": "Skontrolujte svoj e-mail",
   "verify_email_page_body": "Odoslali sme e-mail na adresu {{email}}. E-mailovú adresu je potrebné overiť, aby bola zaručená čo najlepšia doručiteľnosť e-mailov a kalendárov z {{appName}}.",
   "verify_email_banner_body": "Overte svoju e-mailovú adresu, aby ste zaručili čo najlepšiu doručiteľnosť e-mailov a kalendára",
@@ -66,5 +66,7 @@
   "meeting_not_joined_question": "nezúčastnili ste sa stretnutia?",
   "reschedule_cta_short": "Preplánujte tu.",
   "you_and_conjunction": "Vy &",
-  "email_survey_triggered_by_workflow": "Tento prieskum bol spustený pracovným postupom v Cal."
+  "email_survey_triggered_by_workflow": "Tento prieskum bol spustený pracovným postupom v Cal.",
+  "happy_scheduling": "Dovidenia!",
+  "the_calcom_team": "Команда INGA LIFE"
 }

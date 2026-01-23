@@ -11,7 +11,7 @@
   "calcom_explained_new_user": "Pabeidziet sava {{appName}} konta iestatīšanu! Jūs esat tikai dažu soļu attālumā no visu plānošanas problēmu atrisināšanas.",
   "have_any_questions": "Jums ir jautājumi? Mēs esam šeit, lai palīdzētu.",
   "reset_password_subject": "{{appName}}: Paroles atiestatīšanas instrukcijas",
-  "verify_email_subject": "{{appName}}: Verificējiet savu kontu",
+  "verify_email_subject": "{{appName}}: подтвердите адрес эл. почты",
   "check_your_email": "Pārbaudiet savu e-pastu",
   "verify_email_page_body": "Mēs nosūtījām e-pastu uz {{email}}. Ir svarīgi verificēt jūsu e-pastu, lai garantētu labāko e-pastu un kalendāru saņemšanu no {{appName}}.",
   "verify_email_banner_body": "Verificējiet savu e-pasta adresi, lai garantētu labāko e-pastu un kalendāru saņemšanu",
@@ -161,5 +161,7 @@
   "meeting_not_joined_question": "nepiedalījāties sanāksmē?",
   "reschedule_cta_short": "Pārzīmēt šeit.",
   "you_and_conjunction": "Jūs &",
-  "email_survey_triggered_by_workflow": "Šo aptauju aktivizēja darbplūsma Cal."
+  "email_survey_triggered_by_workflow": "Šo aptauju aktivizēja darbplūsma Cal.",
+  "happy_scheduling": "Uz tikšanos!",
+  "the_calcom_team": "Команда INGA LIFE"
 }

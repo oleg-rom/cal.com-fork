@@ -11,7 +11,7 @@
   "calcom_explained_new_user": "Dovršite postavljanje svog {{appName}} računa! Samo vas nekoliko koraka dijeli od rješenja svih vaših problema s rasporedom.",
   "have_any_questions": "Imate pitanja? Tu smo da pomognemo.",
   "reset_password_subject": "{{appName}}: Uputstva za resetiranje lozinke",
-  "verify_email_subject": "{{appName}}: potvrdite svoj račun",
+  "verify_email_subject": "{{appName}}: подтвердите адрес эл. почты",
   "check_your_email": "Provjerite svoj email",
   "old_email_address": "Stari email",
   "new_email_address": "Novi email",
@@ -452,5 +452,7 @@
   "meeting_not_joined_question": "niste prisustvovali sastanku?",
   "reschedule_cta_short": "Zakažite ponovno ovdje.",
   "you_and_conjunction": "Vi &",
-  "email_survey_triggered_by_workflow": "Ova anketa je pokrenuta Workflow-om u Calu."
+  "email_survey_triggered_by_workflow": "Ova anketa je pokrenuta Workflow-om u Calu.",
+  "happy_scheduling": "Vidimo se uskoro!",
+  "the_calcom_team": "Команда INGA LIFE"
 }

@@ -112,3 +112,122 @@ When proposing or executing changes, Codex must:
 - Confirm whether changes target `main` or a feature branch, and why.
 - Confirm CI-built image traceability (commit SHA → GHCR tag).
 - Identify any downstream deploy repo updates required (without implementing them unless asked).
+
+---
+
+## Session Log: Stripe Direct Account Feature (2026-01-22)
+
+### Goal
+Enable PayPal and all Stripe payment methods by switching from Stripe Connect (connected accounts) to direct Stripe account integration.
+
+### Background
+- Cal.com's default Stripe integration uses Stripe Connect (OAuth flow with connected accounts)
+- PayPal was rejected on the connected account ("your application did not meet paypal's criteria")
+- PayPal works fine on the main/platform Stripe account
+- Solution: Modify code to use main Stripe account directly instead of connected accounts
+
+### Branch
+`feature/stripe-direct-account` — custom app feature, per codex.md rules
+
+### Commits
+
+1. **`d60256806`** — `feat(stripe): use direct Stripe account instead of Connect`
+   - **Files changed:**
+     - `packages/app-store/stripepayment/lib/PaymentService.ts`
+     - `packages/app-store/stripepayment/lib/customer.ts`
+     - `packages/app-store/stripepayment/lib/server.ts`
+   - **Changes:**
+     - Removed all `stripeAccount` parameters from Stripe API calls
+     - Updated `retrieveOrCreateStripeCustomerByEmail()` to not require `stripeAccountId`
+     - Removed `stripeAccount` from `StripePaymentData` type
+     - Made `stripe_user_id` optional in credential schema (backward compatibility)
+   - **Build:** ✅ Success (Run ID `21242635968`)
+
+2. **`96a499867`** — `fix(stripe): remove STRIPE_CLIENT_ID requirement for direct mode`
+   - **Files changed:**
+     - `packages/app-store/stripepayment/_metadata.ts`
+   - **Changes:**
+     - Removed `STRIPE_CLIENT_ID` from the `installed` check
+     - App now shows as installed with only `STRIPE_PRIVATE_KEY` and `NEXT_PUBLIC_STRIPE_PUBLIC_KEY`
+   - **Build:** ✅ Success (Run ID `21245150524`, 30m6s)
+
+3. **`a048883d0`** — `fix(stripe): use platform public key for payment form`
+   - **Files changed:**
+     - `packages/app-store/stripepayment/lib/PaymentService.ts`
+   - **Changes:**
+     - Use `NEXT_PUBLIC_STRIPE_PUBLIC_KEY` from environment instead of credential's `stripe_publishable_key`
+     - Made `stripe_publishable_key` optional in credential schema
+     - Fixes payment window not opening (wrong publishable key was being passed to Stripe.js)
+   - **Build:** ✅ Success (included in Run ID `21254678834`)
+
+4. **`130e7f8f5`** — `ci: add concurrency control to prevent duplicate builds`
+   - **Files changed:**
+     - `.github/workflows/docker-build-push-ghcr.yml`
+   - **Changes:**
+     - Added concurrency group to cancel older workflow runs when a new push happens
+     - Prevents wasteful duplicate builds
+   - **Build:** ✅ Success (Run ID `21254678834`, 30m7s)
+
+5. **`800642688`** — `feat(stripe): use Stripe Checkout for payments with automatic tax support`
+   - **Files changed:**
+     - `packages/app-store/stripepayment/lib/PaymentService.ts`
+     - `packages/features/ee/payments/api/webhook.ts`
+     - `packages/features/ee/payments/pages/payment.tsx`
+   - **Changes:**
+     - Switched from embedded Payment Element to Stripe hosted Checkout page
+     - Added `automatic_tax: { enabled: true }` for Stripe Tax support
+     - Payment page now redirects to Stripe Checkout URL
+     - Added webhook handler for `checkout.session.completed` event
+     - Added `STRIPE_DIRECT_MODE` env var for webhook processing in direct mode
+   - **Build:** ✅ Success (Run ID `21256214648`, 32m21s)
+
+### Build Status
+- **Latest build:** Run ID `21256214648` (commit `800642688`)
+- **Status:** ✅ Success
+- **Image tag:** `ghcr.io/oleg-rom/cal.com-fork:sha-800642688`
+
+### Testing Results
+- ✅ Payment form opens correctly
+- ✅ Stripe Checkout page loads with all payment methods
+- ✅ PayPal works on Stripe Checkout
+- ✅ Automatic tax calculation works (Stripe Tax)
+- ✅ Webhooks processed correctly in direct mode
+
+### Environment Variables for Deployment
+When using this feature branch, configure these env vars with your **main** Stripe account (not connected):
+- `STRIPE_PRIVATE_KEY` — Main account secret key (`sk_live_...` or `sk_test_...`) — **Required**
+- `NEXT_PUBLIC_STRIPE_PUBLIC_KEY` — Main account publishable key (`pk_live_...` or `pk_test_...`) — **Required**
+- `STRIPE_WEBHOOK_SECRET` — Webhook secret for main account (`whsec_...`) — **Required for webhooks**
+- `STRIPE_DIRECT_MODE=true` — **Required** for webhook processing in direct mode
+- `STRIPE_CLIENT_ID` — **Not needed** (only used for Connect OAuth, can be omitted)
+
+### Post-Deployment Configuration Changes
+
+#### Username Change
+- Changed username from `inga` to `session` via database:
+  ```sql
+  UPDATE "users" SET username = 'session' WHERE username = 'inga';
+  ```
+- Event URLs now follow pattern: `booking.inga.life/session/{event-slug}`
+
+#### Admin Password Warning Fix
+- **Issue:** Orange warning banner showing "Change your password to access Admin features"
+- **Cause:** User role was set to `INACTIVE_ADMIN` in database
+- **Fix:** Updated role to `ADMIN`:
+  ```sql
+  UPDATE "users" SET role = 'ADMIN' WHERE username = 'inga';
+  ```
+- **Session refresh:** User logged out and back in for session to pick up new role
+- **Result:** ✅ Banner removed successfully
+
+6. **`(pending)`** — `feat(i18n): customize email templates for INGA LIFE branding`
+   - **Files changed:**
+     - All 44 locale files in `apps/web/public/static/locales/*/common.json`
+   - **Changes:**
+     - Updated `happy_scheduling` from "Happy scheduling" to localized "See you soon!" / "До встречи!" etc.
+     - Updated `the_calcom_team` to "Команда INGA LIFE" in all locales
+     - Email verification subject uses `{{appName}}` variable (configured via `NEXT_PUBLIC_APP_NAME` env var)
+   - **Build:** ⏳ Pending
+
+### Related Previous Work
+- `feature/stripe-all-payment-methods` branch — Earlier attempt that kept Connect but enabled `automatic_payment_methods`. PayPal still didn't work due to connected account restrictions.
