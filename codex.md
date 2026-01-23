@@ -220,13 +220,24 @@ When using this feature branch, configure these env vars with your **main** Stri
 - **Session refresh:** User logged out and back in for session to pick up new role
 - **Result:** ✅ Banner removed successfully
 
-6. **`(pending)`** — `feat(i18n): customize email templates for INGA LIFE branding`
+6. **`cfdb41d94`** — `feat(i18n): customize email templates for INGA LIFE branding`
    - **Files changed:**
      - All 44 locale files in `apps/web/public/static/locales/*/common.json`
    - **Changes:**
      - Updated `happy_scheduling` from "Happy scheduling" to localized "See you soon!" / "До встречи!" etc.
      - Updated `the_calcom_team` to "Команда INGA LIFE" in all locales
      - Email verification subject uses `{{appName}}` variable (configured via `NEXT_PUBLIC_APP_NAME` env var)
+   - **Build:** ✅ Success
+
+7. **`(pending)`** — `feat(ui): add timezone hint and remove Cal.com branding`
+   - **Files changed:**
+     - `apps/web/modules/bookings/components/EventMeta.tsx`
+     - `packages/emails/src/components/EmailBodyLogo.tsx`
+     - `packages/emails/templates/confirm-email.html`
+   - **Changes:**
+     - Added timezone hint message on booking pages (Russian text)
+     - Removed Cal.com logo from all email templates
+     - Updated confirm-email.html with INGA LIFE branding
    - **Build:** ⏳ Pending
 
 ### Related Previous Work

@@ -254,6 +254,13 @@ export const EventMeta = ({
                 </span>
               )}
             </EventMetaBlock>
+            {/* Custom timezone hint for INGA LIFE */}
+            <div className="text-subtle mt-4 rounded-md bg-amber-50 p-3 text-xs dark:bg-amber-900/20">
+              <p>
+                Если Ваш часовой пояс отличается от часового пояса Германии, выберите соответствующий часовой
+                пояс, нажав на значок глобуса выше, чтобы время консультации отображалось по местному времени.
+              </p>
+            </div>
             {bookerState === "booking" && eventTotalSeats && bookingSeatAttendeesQty ? (
               <EventMetaBlock icon="user" className={`${colorClass}`}>
                 <div className="text-bookinghighlight flex items-start text-sm">
