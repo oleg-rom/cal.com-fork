@@ -201,5 +201,33 @@ When using this feature branch, configure these env vars with your **main** Stri
 - `STRIPE_DIRECT_MODE=true` — **Required** for webhook processing in direct mode
 - `STRIPE_CLIENT_ID` — **Not needed** (only used for Connect OAuth, can be omitted)
 
+### Post-Deployment Configuration Changes
+
+#### Username Change
+- Changed username from `inga` to `session` via database:
+  ```sql
+  UPDATE "users" SET username = 'session' WHERE username = 'inga';
+  ```
+- Event URLs now follow pattern: `booking.inga.life/session/{event-slug}`
+
+#### Admin Password Warning Fix
+- **Issue:** Orange warning banner showing "Change your password to access Admin features"
+- **Cause:** User role was set to `INACTIVE_ADMIN` in database
+- **Fix:** Updated role to `ADMIN`:
+  ```sql
+  UPDATE "users" SET role = 'ADMIN' WHERE username = 'inga';
+  ```
+- **Session refresh:** User logged out and back in for session to pick up new role
+- **Result:** ✅ Banner removed successfully
+
+6. **`(pending)`** — `feat(i18n): customize email templates for INGA LIFE branding`
+   - **Files changed:**
+     - All 44 locale files in `apps/web/public/static/locales/*/common.json`
+   - **Changes:**
+     - Updated `happy_scheduling` from "Happy scheduling" to localized "See you soon!" / "До встречи!" etc.
+     - Updated `the_calcom_team` to "Команда INGA LIFE" in all locales
+     - Email verification subject uses `{{appName}}` variable (configured via `NEXT_PUBLIC_APP_NAME` env var)
+   - **Build:** ⏳ Pending
+
 ### Related Previous Work
 - `feature/stripe-all-payment-methods` branch — Earlier attempt that kept Connect but enabled `automatic_payment_methods`. PayPal still didn't work due to connected account restrictions.
