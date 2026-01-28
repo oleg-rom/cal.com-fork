@@ -292,9 +292,10 @@ export default async function handler(
     });
 
     // In connected account mode, only process webhooks from connected accounts (event.account is set).
-    // In direct mode (STRIPE_DIRECT_MODE=true), process webhooks from the main account (event.account is undefined).
-    // Bypass this validation for e2e tests.
-    const isDirectMode = process.env.STRIPE_DIRECT_MODE === "true";
+    // In direct mode, process webhooks from the main account (event.account is undefined).
+    // This fork defaults to direct mode (STRIPE_DIRECT_MODE !== "false") for simpler deployment.
+    // Set STRIPE_DIRECT_MODE=false explicitly to enable connected account mode.
+    const isDirectMode = process.env.STRIPE_DIRECT_MODE !== "false";
     log.info("Webhook mode check", {
       eventAccount: event.account,
       isDirectMode,
