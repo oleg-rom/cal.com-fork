@@ -295,6 +295,12 @@ export default async function handler(
     // In direct mode (STRIPE_DIRECT_MODE=true), process webhooks from the main account (event.account is undefined).
     // Bypass this validation for e2e tests.
     const isDirectMode = process.env.STRIPE_DIRECT_MODE === "true";
+    log.info("Webhook mode check", {
+      eventAccount: event.account,
+      isDirectMode,
+      stripeDirectModeEnv: process.env.STRIPE_DIRECT_MODE,
+      isE2E: process.env.NEXT_PUBLIC_IS_E2E,
+    });
     if (!event.account && !isDirectMode && !process.env.NEXT_PUBLIC_IS_E2E) {
       throw new HttpCode({
         statusCode: 202,
