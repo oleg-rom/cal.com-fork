@@ -2,7 +2,7 @@ FROM --platform=$BUILDPLATFORM node:20 AS builder
 
 WORKDIR /calcom
 
-## If we want to read any ENV variable from .env file, we need to first accept and pass it as an argument to the Dockerfile
+## Build arguments
 ARG NEXT_PUBLIC_LICENSE_CONSENT
 ARG NEXT_PUBLIC_WEBSITE_TERMS_URL
 ARG NEXT_PUBLIC_WEBSITE_PRIVACY_POLICY_URL
@@ -13,8 +13,6 @@ ARG CALENDSO_ENCRYPTION_KEY=secret
 ARG MAX_OLD_SPACE_SIZE=6144
 ARG NEXT_PUBLIC_API_V2_URL
 ARG CSP_POLICY
-
-## We need these variables as required by Next.js build to create rewrites
 ARG NEXT_PUBLIC_SINGLE_ORG_SLUG
 ARG ORGANIZATIONS_ENABLED
 
@@ -34,16 +32,60 @@ ENV NEXT_PUBLIC_WEBAPP_URL=http://NEXT_PUBLIC_WEBAPP_URL_PLACEHOLDER \
   BUILD_STANDALONE=true \
   CSP_POLICY=$CSP_POLICY
 
-COPY package.json yarn.lock .yarnrc.yml playwright.config.ts turbo.json i18n.json ./
+# ============================================
+# STEP 1: Copy dependency manifests only (cached layer)
+# ============================================
+COPY package.json yarn.lock .yarnrc.yml turbo.json ./
 COPY .yarn ./.yarn
+
+# Copy only package.json files from all workspaces (for dependency resolution)
+# This allows yarn install to be cached when only source code changes
+COPY apps/web/package.json ./apps/web/package.json
+COPY apps/api/v2/package.json ./apps/api/v2/package.json
+COPY packages/app-store/package.json ./packages/app-store/package.json
+COPY packages/app-store-cli/package.json ./packages/app-store-cli/package.json
+COPY packages/config/package.json ./packages/config/package.json
+COPY packages/coss-ui/package.json ./packages/coss-ui/package.json
+COPY packages/dayjs/package.json ./packages/dayjs/package.json
+COPY packages/debugging/package.json ./packages/debugging/package.json
+COPY packages/emails/package.json ./packages/emails/package.json
+COPY packages/embeds/embed-core/package.json ./packages/embeds/embed-core/package.json
+COPY packages/embeds/embed-react/package.json ./packages/embeds/embed-react/package.json
+COPY packages/embeds/embed-snippet/package.json ./packages/embeds/embed-snippet/package.json
+COPY packages/features/package.json ./packages/features/package.json
+COPY packages/kysely/package.json ./packages/kysely/package.json
+COPY packages/lib/package.json ./packages/lib/package.json
+COPY packages/platform/atoms/package.json ./packages/platform/atoms/package.json
+COPY packages/platform/constants/package.json ./packages/platform/constants/package.json
+COPY packages/platform/enums/package.json ./packages/platform/enums/package.json
+COPY packages/platform/libraries/package.json ./packages/platform/libraries/package.json
+COPY packages/platform/types/package.json ./packages/platform/types/package.json
+COPY packages/platform/utils/package.json ./packages/platform/utils/package.json
+COPY packages/prisma/package.json ./packages/prisma/package.json
+COPY packages/testing/package.json ./packages/testing/package.json
+COPY packages/trpc/package.json ./packages/trpc/package.json
+COPY packages/tsconfig/package.json ./packages/tsconfig/package.json
+COPY packages/types/package.json ./packages/types/package.json
+COPY packages/ui/package.json ./packages/ui/package.json
+
+# ============================================
+# STEP 2: Install dependencies (cached if package.json unchanged)
+# ============================================
+RUN yarn config set httpTimeout 1200000
+RUN yarn install --immutable || yarn install
+
+# ============================================
+# STEP 3: Copy source code (invalidates on code changes)
+# ============================================
+COPY playwright.config.ts i18n.json ./
 COPY apps/web ./apps/web
 COPY apps/api/v2 ./apps/api/v2
 COPY packages ./packages
 
-RUN yarn config set httpTimeout 1200000
+# ============================================
+# STEP 4: Build application
+# ============================================
 RUN npx turbo prune --scope=@calcom/web --scope=@calcom/trpc --docker
-RUN yarn install
-# Build and make embed servable from web/public/embed folder
 RUN yarn workspace @calcom/trpc run build
 RUN yarn --cwd packages/embeds/embed-core workspace @calcom/embed-core run build
 RUN yarn --cwd apps/web workspace @calcom/web run copy-app-store-static
