@@ -33,54 +33,32 @@ ENV NEXT_PUBLIC_WEBAPP_URL=http://NEXT_PUBLIC_WEBAPP_URL_PLACEHOLDER \
   CSP_POLICY=$CSP_POLICY
 
 # ============================================
-# STEP 1: Copy dependency manifests only (cached layer)
+# STEP 1: Copy dependency files for caching
 # ============================================
 COPY package.json yarn.lock .yarnrc.yml turbo.json ./
 COPY .yarn ./.yarn
 
-# Copy only package.json files from all workspaces (for dependency resolution)
-# This allows yarn install to be cached when only source code changes
+# Copy all package.json files to preserve workspace structure for yarn install
+# This enables dependency caching - yarn install only re-runs when package.json changes
 COPY apps/web/package.json ./apps/web/package.json
 COPY apps/api/v2/package.json ./apps/api/v2/package.json
-COPY packages/app-store/package.json ./packages/app-store/package.json
-COPY packages/app-store-cli/package.json ./packages/app-store-cli/package.json
-COPY packages/config/package.json ./packages/config/package.json
-COPY packages/coss-ui/package.json ./packages/coss-ui/package.json
-COPY packages/dayjs/package.json ./packages/dayjs/package.json
-COPY packages/debugging/package.json ./packages/debugging/package.json
-COPY packages/emails/package.json ./packages/emails/package.json
-COPY packages/embeds/embed-core/package.json ./packages/embeds/embed-core/package.json
-COPY packages/embeds/embed-react/package.json ./packages/embeds/embed-react/package.json
-COPY packages/embeds/embed-snippet/package.json ./packages/embeds/embed-snippet/package.json
-COPY packages/features/package.json ./packages/features/package.json
-COPY packages/kysely/package.json ./packages/kysely/package.json
-COPY packages/lib/package.json ./packages/lib/package.json
-COPY packages/platform/atoms/package.json ./packages/platform/atoms/package.json
-COPY packages/platform/constants/package.json ./packages/platform/constants/package.json
-COPY packages/platform/enums/package.json ./packages/platform/enums/package.json
-COPY packages/platform/libraries/package.json ./packages/platform/libraries/package.json
-COPY packages/platform/types/package.json ./packages/platform/types/package.json
-COPY packages/platform/utils/package.json ./packages/platform/utils/package.json
-COPY packages/prisma/package.json ./packages/prisma/package.json
-COPY packages/testing/package.json ./packages/testing/package.json
-COPY packages/trpc/package.json ./packages/trpc/package.json
-COPY packages/tsconfig/package.json ./packages/tsconfig/package.json
-COPY packages/types/package.json ./packages/types/package.json
-COPY packages/ui/package.json ./packages/ui/package.json
+
+# Copy all packages with their package.json files (needed for workspace resolution)
+# We copy full directories here because app-store has 100+ nested packages
+COPY packages ./packages
 
 # ============================================
-# STEP 2: Install dependencies (cached if package.json unchanged)
+# STEP 2: Install dependencies (cached layer)
 # ============================================
 RUN yarn config set httpTimeout 1200000
-RUN yarn install --immutable || yarn install
+RUN yarn install
 
 # ============================================
-# STEP 3: Copy source code (invalidates on code changes)
+# STEP 3: Copy remaining source code
 # ============================================
 COPY playwright.config.ts i18n.json ./
 COPY apps/web ./apps/web
 COPY apps/api/v2 ./apps/api/v2
-COPY packages ./packages
 
 # ============================================
 # STEP 4: Build application
