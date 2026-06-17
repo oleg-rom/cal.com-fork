@@ -92,20 +92,32 @@ class StripePaymentService implements IAbstractPaymentService {
       // Generate a unique payment ID for tracking
       const paymentUid = uuidv4();
 
+      // Fetch booking UID for the success redirect (booking page uses uid, not numeric id)
+      const bookingRecord = await prisma.booking.findUnique({
+        where: { id: bookingId },
+        select: { uid: true },
+      });
+      if (!bookingRecord) {
+        throw new Error(`Booking ${bookingId} not found`);
+      }
+
+      // Create a saved Stripe Price so allow_promotion_codes works (price_data disables the coupon field)
+      const price = await this.stripe.prices.create({
+        currency: payment.currency,
+        unit_amount: payment.amount,
+        tax_behavior: "exclusive",
+        product_data: {
+          name: bookingTitle || eventTitle || "Booking Payment",
+        },
+      });
+
       // Create Checkout Session for Stripe hosted page with tax support
       const checkoutSession = await this.stripe.checkout.sessions.create({
         mode: "payment",
         customer: customer.id,
         line_items: [
           {
-            price_data: {
-              currency: payment.currency,
-              unit_amount: payment.amount,
-              product_data: {
-                name: bookingTitle || eventTitle || "Booking Payment",
-                description: `Booking with ${username || "host"}`,
-              },
-            },
+            price: price.id,
             quantity: 1,
           },
         ],
@@ -127,7 +139,7 @@ class StripePaymentService implements IAbstractPaymentService {
           bookingTitle: bookingTitle || "",
           paymentUid, // Include payment UID for webhook processing
         }),
-        success_url: `${WEBAPP_URL}/booking/${bookingId}?paymentStatus=success`,
+        success_url: `${WEBAPP_URL}/booking/${bookingRecord.uid}?paymentStatus=success`,
         cancel_url: `${WEBAPP_URL}/payment/${paymentUid}?paymentStatus=cancelled`,
       });
 
@@ -424,15 +436,12 @@ class StripePaymentService implements IAbstractPaymentService {
         return false;
       }
 
-      // Expire all current sessions
-      const sessions = await this.stripe.checkout.sessions.list({
-        payment_intent: payment.externalId,
-      });
-      for (const session of sessions.data) {
-        await this.stripe.checkout.sessions.expire(session.id);
+      // externalId is the checkout session ID — expire it directly
+      try {
+        await this.stripe.checkout.sessions.expire(payment.externalId);
+      } catch {
+        // Session may already be expired/completed — ignore
       }
-      // Then cancel the payment intent
-      await this.stripe.paymentIntents.cancel(payment.externalId);
       return true;
     } catch (e) {
       log.error("Stripe: Unable to delete Payment in stripe of paymentId", paymentId, safeStringify(e));
