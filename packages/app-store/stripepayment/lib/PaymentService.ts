@@ -112,6 +112,7 @@ class StripePaymentService implements IAbstractPaymentService {
         automatic_tax: {
           enabled: true,
         },
+        allow_promotion_codes: true,
         customer_update: {
           address: "auto",
         },
