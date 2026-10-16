@@ -8,9 +8,25 @@ import type Stripe from "stripe";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockPrisma = vi.hoisted(() => ({
-  payment: { findFirst: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
-  booking: { update: vi.fn() },
+  payment: { findFirst: vi.fn(), update: vi.fn(), updateMany: vi.fn(), findUniqueOrThrow: vi.fn() },
+  booking: { update: vi.fn(), findUniqueOrThrow: vi.fn() },
   $transaction: vi.fn(),
+}));
+
+// Coordination semantics are verified against PostgreSQL in the integration tests; here the claim
+// outcome is scripted so the webhook routing can be tested in isolation.
+const mockClaim = vi.hoisted(() => vi.fn());
+vi.mock("@calcom/features/bookings/repositories/PaymentProcessingRepository", () => ({
+  PaymentProcessingRepository: class {
+    claim = mockClaim;
+    recordBookingStatusBeforePayment = vi.fn();
+    markPaymentRecorded = vi.fn();
+    markStepStarted = vi.fn();
+    markStepCompleted = vi.fn();
+    renewLease = vi.fn();
+    complete = vi.fn();
+    fail = vi.fn();
+  },
 }));
 
 vi.mock("@calcom/prisma", () => ({ prisma: mockPrisma, default: mockPrisma }));
@@ -200,10 +216,25 @@ describe("Stripe payment webhook: checkout sessions", () => {
 
     vi.mocked(buffer).mockResolvedValue(Buffer.from(RAW_BODY));
     mockPrisma.payment.findFirst.mockResolvedValue(storedPayment());
-    mockPrisma.$transaction.mockResolvedValue([
-      { id: PAYMENT_ID, externalId: SESSION_ID },
-      { status: BookingStatus.ACCEPTED },
-    ]);
+    mockPrisma.$transaction.mockResolvedValue([{ id: PAYMENT_ID }, { id: BOOKING_ID }]);
+    mockPrisma.payment.findUniqueOrThrow.mockResolvedValue({ externalId: SESSION_ID });
+    mockPrisma.booking.findUniqueOrThrow.mockResolvedValue({ status: BookingStatus.ACCEPTED });
+    mockClaim.mockResolvedValue({
+      outcome: "claimed",
+      state: {
+        paymentId: PAYMENT_ID,
+        status: "PROCESSING",
+        attempts: 1,
+        bookingWasAcceptedBeforePayment: null,
+        paymentRecordedAt: null,
+        calendarStartedAt: null,
+        calendarCompletedAt: null,
+        bookingPaidStartedAt: null,
+        bookingPaidCompletedAt: null,
+        confirmationStartedAt: null,
+        confirmationCompletedAt: null,
+      },
+    });
     vi.mocked(getBooking).mockResolvedValue({
       booking: {
         id: BOOKING_ID,
@@ -355,15 +386,39 @@ describe("Stripe payment webhook: checkout sessions", () => {
     expectNoBookingSideEffects();
   });
 
-  it("a sequential redelivery of an already processed session is a no-op", async () => {
+  it("a sequential redelivery of an already confirmed session is a no-op", async () => {
     mockPrisma.payment.findFirst.mockResolvedValue(
       storedPayment({ success: true, bookingStatus: BookingStatus.ACCEPTED })
     );
+    mockClaim.mockResolvedValue({ outcome: "completed" });
 
     const res = await deliver(buildEvent("checkout.session.completed", buildSession()));
 
     expect(res.statusCode).toBe(200);
     expect(getBooking).not.toHaveBeenCalled();
+    expectNoBookingSideEffects();
+  });
+
+  it("answers 409 (retry later) while another worker holds the confirmation lease", async () => {
+    mockClaim.mockResolvedValue({ outcome: "busy" });
+
+    const res = await deliver(buildEvent("checkout.session.async_payment_succeeded", buildSession()));
+
+    expect(res.statusCode).toBe(409);
+    expect(getBooking).not.toHaveBeenCalled();
+    expectNoBookingSideEffects();
+  });
+
+  it("does not resume a paid run once the booking was cancelled", async () => {
+    mockPrisma.payment.findFirst.mockResolvedValue(
+      storedPayment({ success: true, bookingStatus: BookingStatus.CANCELLED })
+    );
+
+    const res = await deliver(buildEvent("checkout.session.completed", buildSession()));
+
+    expect(res.statusCode).toBe(200);
+    expect(mockClaim).not.toHaveBeenCalled();
+    expect(mockPrisma.payment.updateMany).not.toHaveBeenCalled();
     expectNoBookingSideEffects();
   });
 

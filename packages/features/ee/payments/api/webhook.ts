@@ -286,13 +286,12 @@ async function handleCheckoutSessionPaid(event: Stripe.Event, traceContext: Trac
 
   const payment = await findCheckoutSessionPayment(session);
 
-  // Only skips sequential redelivery; concurrent deliveries are still not deduplicated (audit item S2).
-  if (payment.success) {
-    throw new HttpCode({ statusCode: 200, message: "Payment already processed" });
-  }
-
   const bookingStatus = payment.booking?.status;
   if (bookingStatus === BookingStatus.CANCELLED || bookingStatus === BookingStatus.REJECTED) {
+    // Either confirmed and cancelled later, or already recorded for settlement: nothing to do.
+    if (payment.success) {
+      throw new HttpCode({ statusCode: 200, message: "Payment already recorded for a closed booking" });
+    }
     // Money was received for a closed booking: record it for manual settlement instead of
     // reopening the booking. Automatic refunds are intentionally not issued here.
     await prisma.payment.updateMany({
@@ -323,6 +322,7 @@ async function handleCheckoutSessionPaid(event: Stripe.Event, traceContext: Trac
     });
   }
 
+  // Repeated, concurrent and resumed deliveries are coordinated inside handlePaymentSuccess.
   await handlePaymentSuccess({
     paymentId: payment.id,
     bookingId: payment.bookingId,

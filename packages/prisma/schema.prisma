@@ -1120,20 +1120,21 @@ model ReminderMail {
 }
 
 model Payment {
-  id            Int            @id @default(autoincrement())
-  uid           String         @unique
-  app           App?           @relation(fields: [appId], references: [slug], onDelete: Cascade)
+  id            Int                @id @default(autoincrement())
+  uid           String             @unique
+  app           App?               @relation(fields: [appId], references: [slug], onDelete: Cascade)
   appId         String?
   bookingId     Int
-  booking       Booking?       @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  booking       Booking?           @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   amount        Int
   fee           Int
   currency      String
   success       Boolean
   refunded      Boolean
   data          Json
-  externalId    String         @unique
-  paymentOption PaymentOption? @default(ON_BOOKING)
+  externalId    String             @unique
+  paymentOption PaymentOption?     @default(ON_BOOKING)
+  processing    PaymentProcessing?
 
   @@index([bookingId])
   @@index([externalId])
@@ -1142,6 +1143,45 @@ model Payment {
 enum PaymentOption {
   ON_BOOKING
   HOLD
+}
+
+enum PaymentProcessingStatus {
+  PROCESSING
+  FAILED
+  COMPLETED
+}
+
+// Coordinates confirmation of a successful payment across webhook redeliveries, concurrent requests
+// and crashes. Kept separate from Payment.data because that JSON is rewritten wholesale elsewhere.
+model PaymentProcessing {
+  paymentId                       Int                     @id
+  payment                         Payment                 @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  status                          PaymentProcessingStatus
+  claimToken                      String?
+  leaseExpiresAt                  DateTime?
+  attempts                        Int                     @default(0)
+  bookingWasAcceptedBeforePayment Boolean?
+  paymentRecordedAt               DateTime?
+  // Per step: StartedAt is the start of the latest attempt, StartCount how often the step was entered.
+  // StartCount > 1 means an attempt was interrupted after it began, so its external actions may repeat.
+  calendarStartedAt               DateTime?
+  calendarCompletedAt             DateTime?
+  calendarStartCount              Int                     @default(0)
+  // Event enrichment produced by the calendar step (video call data, iCalUID, replaced location),
+  // so a resumed run can send BOOKING_PAID and emails without creating the meeting again.
+  calendarResult                  Json?
+  bookingPaidStartedAt            DateTime?
+  bookingPaidCompletedAt          DateTime?
+  bookingPaidStartCount           Int                     @default(0)
+  confirmationStartedAt           DateTime?
+  confirmationCompletedAt         DateTime?
+  confirmationStartCount          Int                     @default(0)
+  completedAt                     DateTime?
+  lastError                       String?
+  createdAt                       DateTime                @default(now())
+  updatedAt                       DateTime                @updatedAt
+
+  @@index([status, leaseExpiresAt])
 }
 
 enum WebhookTriggerEvents {
