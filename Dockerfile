@@ -51,7 +51,19 @@ COPY packages ./packages
 # STEP 2: Install dependencies (cached layer)
 # ============================================
 RUN yarn config set httpTimeout 1200000
-RUN yarn install
+# `yarn install --immutable` cannot be used here: apps/api and example-apps are not copied, so Yarn
+# legitimately drops their lockfile entries. Instead, fail if the install resolved any package version
+# that is not pinned in the committed yarn.lock (CI also verifies the lockfile on the full checkout).
+RUN cp yarn.lock /tmp/yarn.lock.committed \
+  && yarn install \
+  && grep -E '^  resolution: ' yarn.lock | sort -u > /tmp/resolutions.installed \
+  && grep -E '^  resolution: ' /tmp/yarn.lock.committed | sort -u > /tmp/resolutions.committed \
+  && comm -23 /tmp/resolutions.installed /tmp/resolutions.committed > /tmp/resolutions.unpinned \
+  && if [ -s /tmp/resolutions.unpinned ]; then \
+       echo "yarn install resolved versions that are not in the committed yarn.lock:"; \
+       cat /tmp/resolutions.unpinned; \
+       exit 1; \
+     fi
 
 # ============================================
 # STEP 3: Copy remaining source code

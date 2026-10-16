@@ -42,6 +42,19 @@ jobs:
         run: |
           git submodule update --init
 
+      - name: Set up Node.js (same version as the Docker image)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.20.2
+
+      # The Docker build installs a subset of workspaces and cannot use --immutable, so the strict
+      # lockfile check runs here on the full checkout. update-lockfile mode resolves without installing
+      # (Yarn rejects --immutable in this mode), so any change it makes to yarn.lock fails the job.
+      - name: Verify yarn.lock matches package.json
+        run: |
+          node "$(sed -n 's/^yarnPath: //p' .yarnrc.yml)" install --mode=update-lockfile
+          git diff --exit-code -- yarn.lock
+
       - name: Log in to the Github Container registry
         uses: docker/login-action@v3
         with:
