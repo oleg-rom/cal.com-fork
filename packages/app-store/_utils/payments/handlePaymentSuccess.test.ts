@@ -27,8 +27,8 @@ vi.mock("@calcom/prisma", async (importOriginal) => {
     ...actual,
     default: {
       ...actual.default,
-      payment: { update: vi.fn() },
-      booking: { update: vi.fn() },
+      payment: { update: vi.fn(), findUniqueOrThrow: vi.fn() },
+      booking: { update: vi.fn(), findUniqueOrThrow: vi.fn() },
       $transaction: vi.fn(),
       profile: { findMany: vi.fn().mockResolvedValue([]) },
       credential: { findMany: vi.fn().mockResolvedValue([]) },
@@ -39,6 +39,33 @@ vi.mock("@calcom/prisma", async (importOriginal) => {
     },
   };
 });
+vi.mock("@calcom/features/bookings/repositories/PaymentProcessingRepository", () => ({
+  PaymentProcessingRepository: class {
+    claim = vi.fn().mockResolvedValue({
+      outcome: "claimed",
+      state: {
+        paymentId: 100,
+        status: "PROCESSING",
+        attempts: 1,
+        bookingWasAcceptedBeforePayment: null,
+        paymentRecordedAt: null,
+        calendarStartedAt: null,
+        calendarCompletedAt: null,
+        bookingPaidStartedAt: null,
+        bookingPaidCompletedAt: null,
+        confirmationStartedAt: null,
+        confirmationCompletedAt: null,
+      },
+    });
+    recordBookingStatusBeforePayment = vi.fn();
+    markPaymentRecorded = vi.fn();
+    markStepStarted = vi.fn();
+    markStepCompleted = vi.fn();
+    renewLease = vi.fn();
+    complete = vi.fn();
+    fail = vi.fn();
+  },
+}));
 vi.mock("@calcom/lib/getOrgIdFromMemberOrTeamId");
 vi.mock("@calcom/features/ee/organizations/lib/getBookerUrlServer");
 vi.mock("@calcom/lib/getTeamIdFromEventType");
@@ -211,6 +238,13 @@ describe("handlePaymentSuccess", () => {
       { id: mockPaymentId, externalId: "ext-123" },
       { status: BookingStatus.ACCEPTED },
     ]);
+
+    vi.mocked(prisma.payment.findUniqueOrThrow).mockResolvedValue({
+      externalId: "ext-123",
+    } as unknown as Awaited<ReturnType<typeof prisma.payment.findUniqueOrThrow>>);
+    vi.mocked(prisma.booking.findUniqueOrThrow).mockResolvedValue({
+      status: BookingStatus.ACCEPTED,
+    } as unknown as Awaited<ReturnType<typeof prisma.booking.findUniqueOrThrow>>);
 
     // Mock webhook functions
     vi.mocked(getWebhooks).mockResolvedValue([mockWebhookSubscriber]);
