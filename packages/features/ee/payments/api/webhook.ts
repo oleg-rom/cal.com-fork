@@ -182,33 +182,145 @@ const handleSetupSuccess = async (
   }
 };
 
-/**
- * Handle Stripe Checkout Session completion (used for hosted checkout with tax support)
- */
-async function handleCheckoutSessionCompleted(
-  event: Stripe.Event,
-  traceContext: TraceContext
-) {
-  const session = event.data.object as Stripe.Checkout.Session;
+type CheckoutSessionPaymentState = "paid" | "awaiting_payment" | "not_a_booking_payment";
 
-  // Find payment by checkout session ID
+/**
+ * Delayed methods (e.g. SEPA Debit) fire checkout.session.completed with payment_status "unpaid";
+ * the money only arrives with checkout.session.async_payment_succeeded.
+ * "no_payment_required" is only a valid booking payment for a payment-mode session discounted to zero
+ * (e.g. a 100% promotion code).
+ */
+export function getCheckoutSessionPaymentState(
+  session: Pick<Stripe.Checkout.Session, "mode" | "payment_status" | "amount_total">
+): CheckoutSessionPaymentState {
+  if (session.mode !== "payment") return "not_a_booking_payment";
+  if (session.payment_status === "paid") return "paid";
+  if (session.payment_status === "no_payment_required") {
+    if (session.amount_total === 0) return "paid";
+    return "not_a_booking_payment";
+  }
+  return "awaiting_payment";
+}
+
+type CheckoutSessionPayment = Prisma.PaymentGetPayload<{
+  select: {
+    id: true;
+    uid: true;
+    bookingId: true;
+    success: true;
+    data: true;
+    booking: { select: { status: true } };
+  };
+}>;
+
+async function findCheckoutSessionPayment(session: Stripe.Checkout.Session): Promise<CheckoutSessionPayment> {
   const payment = await prisma.payment.findFirst({
     where: {
       externalId: session.id,
     },
     select: {
       id: true,
+      uid: true,
       bookingId: true,
+      success: true,
+      data: true,
+      booking: {
+        select: {
+          status: true,
+        },
+      },
     },
   });
 
   if (!payment?.bookingId) {
-    log.error(
-      "Stripe: Checkout Session Payment Not Found",
-      safeStringify(session),
-      safeStringify(payment)
-    );
+    log.error("Stripe: Checkout Session Payment Not Found", { checkoutSessionId: session.id });
     throw new HttpCode({ statusCode: 204, message: "Payment not found" });
+  }
+
+  const { bookingId: metadataBookingId, paymentUid: metadataPaymentUid } = session.metadata ?? {};
+  const isLinkedToPayment =
+    (!metadataPaymentUid || metadataPaymentUid === payment.uid) &&
+    (!metadataBookingId || metadataBookingId === String(payment.bookingId));
+
+  if (!isLinkedToPayment) {
+    log.error("Stripe: Checkout Session metadata does not match the stored payment", {
+      checkoutSessionId: session.id,
+      paymentId: payment.id,
+    });
+    throw new HttpCode({ statusCode: 202, message: "Checkout session does not match payment" });
+  }
+
+  return payment;
+}
+
+function getPaymentIntentId(session: Stripe.Checkout.Session): string | null {
+  if (!session.payment_intent) return null;
+  if (typeof session.payment_intent === "string") return session.payment_intent;
+  return session.payment_intent.id;
+}
+
+/**
+ * Handles checkout.session.completed and checkout.session.async_payment_succeeded
+ * (used for hosted checkout with tax support).
+ */
+async function handleCheckoutSessionPaid(event: Stripe.Event, traceContext: TraceContext): Promise<void> {
+  const session = event.data.object as Stripe.Checkout.Session;
+  const paymentState = getCheckoutSessionPaymentState(session);
+
+  if (paymentState === "awaiting_payment") {
+    throw new HttpCode({
+      statusCode: 202,
+      message: `Checkout session is not paid yet (payment_status: ${session.payment_status})`,
+    });
+  }
+
+  if (paymentState === "not_a_booking_payment") {
+    log.error("Stripe: Checkout Session is not a valid booking payment", {
+      checkoutSessionId: session.id,
+      mode: session.mode,
+      paymentStatus: session.payment_status,
+      amountTotal: session.amount_total,
+    });
+    throw new HttpCode({ statusCode: 202, message: "Checkout session is not a booking payment" });
+  }
+
+  const payment = await findCheckoutSessionPayment(session);
+
+  // Only skips sequential redelivery; concurrent deliveries are still not deduplicated (audit item S2).
+  if (payment.success) {
+    throw new HttpCode({ statusCode: 200, message: "Payment already processed" });
+  }
+
+  const bookingStatus = payment.booking?.status;
+  if (bookingStatus === BookingStatus.CANCELLED || bookingStatus === BookingStatus.REJECTED) {
+    // Money was received for a closed booking: record it for manual settlement instead of
+    // reopening the booking. Automatic refunds are intentionally not issued here.
+    await prisma.payment.updateMany({
+      where: { id: payment.id, success: false },
+      data: {
+        success: true,
+        data: {
+          ...(payment.data as Prisma.JsonObject),
+          manualSettlementRequired: {
+            reason: "paid_after_booking_closed",
+            bookingStatus,
+            checkoutSessionId: session.id,
+            paymentIntentId: getPaymentIntentId(session),
+            stripeEventId: event.id,
+            recordedAt: new Date().toISOString(),
+          },
+        },
+      },
+    });
+    log.error("Stripe: payment received for a closed booking, manual settlement required", {
+      paymentId: payment.id,
+      bookingId: payment.bookingId,
+      bookingStatus,
+    });
+    throw new HttpCode({
+      statusCode: 200,
+      message: "Payment recorded for a closed booking; manual settlement required",
+    });
   }
 
   await handlePaymentSuccess({
@@ -216,6 +328,39 @@ async function handleCheckoutSessionCompleted(
     bookingId: payment.bookingId,
     appSlug: "stripe",
     traceContext,
+  });
+}
+
+/**
+ * Payment has no status column, so the failure is recorded in Payment.data.
+ * The booking stays PENDING and unpaid; it is never cancelled or downgraded here.
+ */
+async function handleCheckoutSessionAsyncPaymentFailed(event: Stripe.Event): Promise<void> {
+  const session = event.data.object as Stripe.Checkout.Session;
+  const payment = await findCheckoutSessionPayment(session);
+
+  if (payment.success) {
+    log.warn("Stripe: ignoring async payment failure for an already successful payment", {
+      paymentId: payment.id,
+      checkoutSessionId: session.id,
+    });
+    throw new HttpCode({ statusCode: 200, message: "Payment already succeeded; failure ignored" });
+  }
+
+  // The success filter skips the write if the payment succeeded after it was read above.
+  await prisma.payment.updateMany({
+    where: { id: payment.id, success: false },
+    data: {
+      data: {
+        ...(payment.data as Prisma.JsonObject),
+        asyncPaymentFailure: {
+          checkoutSessionId: session.id,
+          paymentIntentId: getPaymentIntentId(session),
+          stripeEventId: event.id,
+          failedAt: new Date(event.created * 1000).toISOString(),
+        },
+      },
+    },
   });
 }
 
@@ -227,7 +372,9 @@ type WebhookHandler = (
 const webhookHandlers: Record<string, WebhookHandler | undefined> = {
   "payment_intent.succeeded": handleStripePaymentSuccess,
   "setup_intent.succeeded": handleSetupSuccess,
-  "checkout.session.completed": handleCheckoutSessionCompleted,
+  "checkout.session.completed": handleCheckoutSessionPaid,
+  "checkout.session.async_payment_succeeded": handleCheckoutSessionPaid,
+  "checkout.session.async_payment_failed": handleCheckoutSessionAsyncPaymentFailed,
 };
 
 /**
