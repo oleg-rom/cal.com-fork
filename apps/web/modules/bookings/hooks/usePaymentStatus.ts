@@ -1,12 +1,18 @@
 import { useMemo } from "react";
 
 import { useLocale } from "@calcom/lib/hooks/useLocale";
+import type { UnfinishedRefundStatus } from "@calcom/lib/payment/getUnfinishedRefundStatus";
 import { RefundPolicy } from "@calcom/lib/payment/types";
 import { BookingStatus } from "@calcom/prisma/enums";
 
 interface Payment {
   success: boolean;
   refunded: boolean;
+  /**
+   * State of a refund that has not been completed: still processing in Stripe, waiting for an action,
+   * or failed (the money has not been returned).
+   */
+  refundStatus?: UnfinishedRefundStatus | null;
   paymentOption?: string | null;
 }
 
@@ -45,6 +51,15 @@ export function usePaymentStatus({
     // Payment not completed and not refunded
     if (!payment.success && !payment.refunded) {
       return t("booking_with_payment_cancelled");
+    }
+
+    // Payment completed and a refund was attempted but is not complete: say what actually happened
+    if (payment.success && !payment.refunded) {
+      if (payment.refundStatus === "pending") return t("booking_with_payment_cancelled_refund_pending");
+      if (payment.refundStatus === "requires_action") {
+        return t("booking_with_payment_cancelled_refund_requires_action");
+      }
+      if (payment.refundStatus === "failed") return t("booking_with_payment_cancelled_refund_failed");
     }
 
     // Payment completed but not refunded
