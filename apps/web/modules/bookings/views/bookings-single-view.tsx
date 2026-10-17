@@ -409,6 +409,7 @@ export default function Success(props: PageProps) {
       ? {
           success: props.paymentStatus.success,
           refunded: props.paymentStatus.refunded,
+          refundStatus: props.paymentStatus.refundStatus,
           paymentOption: props.paymentStatus.paymentOption,
         }
       : { success: false, refunded: false },
