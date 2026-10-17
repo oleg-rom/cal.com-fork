@@ -14,6 +14,7 @@ import { shouldHideBrandingForEvent } from "@calcom/features/profile/lib/hideBra
 import { parseRecurringEvent } from "@calcom/lib/isRecurringEvent";
 import { markdownToSafeHTML } from "@calcom/lib/markdownToSafeHTML";
 import { maybeGetBookingUidFromSeat } from "@calcom/lib/server/maybeGetBookingUidFromSeat";
+import { getUnfinishedRefundStatus } from "@calcom/lib/payment/getUnfinishedRefundStatus";
 import prisma from "@calcom/prisma";
 import { customInputSchema } from "@calcom/prisma/zod-utils";
 import { meRouter } from "@calcom/trpc/server/routers/viewer/me/_router";
@@ -193,7 +194,7 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
     await handleSeatsEventTypeOnBooking(eventType, bookingInfo, seatReferenceUid, isLoggedInUserHost);
   }
 
-  const payment = await prisma.payment.findFirst({
+  const paymentRecord = await prisma.payment.findFirst({
     where: {
       bookingId: bookingInfo.id,
     },
@@ -204,8 +205,18 @@ export async function getServerSideProps(context: GetServerSidePropsContext) {
       currency: true,
       amount: true,
       paymentOption: true,
+      data: true,
     },
   });
+  // Payment.data is not sent to the page; only the state of an unfinished or failed refund.
+  let payment = null;
+  if (paymentRecord) {
+    const { data: paymentData, ...paymentFields } = paymentRecord;
+    payment = {
+      ...paymentFields,
+      refundStatus: getUnfinishedRefundStatus(paymentRecord.refunded, paymentData),
+    };
+  }
 
   if (!canViewHiddenData) {
     for (const key in bookingInfo.responses) {
