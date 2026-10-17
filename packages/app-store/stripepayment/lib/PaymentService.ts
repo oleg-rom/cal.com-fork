@@ -461,7 +461,8 @@ class StripePaymentService implements IAbstractPaymentService {
       throw new ErrorWithCode(
         ErrorCode.PaymentRefundFailure,
         `Stripe refund of payment ${payment.id} is ${outcome.status} in Stripe (${outcome.refundIds.join(", ")}), but saving the result failed`,
-        { paymentId: payment.id, retryable: true }
+        // Callers must not report this as money that was not returned.
+        { paymentId: payment.id, retryable: true, refundRequestedInStripe: true }
       );
     }
   }
