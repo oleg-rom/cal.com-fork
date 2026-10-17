@@ -2297,6 +2297,7 @@
   "booking_with_payment_cancelled": "Більше не можна оплатити цю подію",
   "booking_with_payment_cancelled_already_paid": "Повернення коштів за це бронювання вже виконано.",
   "booking_with_payment_cancelled_refunded": "Кошти за бронювання повернено.",
+  "refund_failed_payment_not_returned": "Бронювання скасовано, але кошти не було повернено автоматично. Поверніть їх в особистому кабінеті платіжної системи.",
   "booking_with_payment_cancelled_no_refund": "Згідно з політикою повернення коштів події, оплата бронювання не підлягає поверненню.",
   "booking_with_payment_cancelled_refund_window_expired": "Термін повернення коштів за подію закінчився. Тому оплата бронювання не підлягає поверненню.",
   "booking_confirmation_failed": "Не вдалося підтвердити бронювання",
