@@ -18,12 +18,17 @@ import { setupAndTeardown } from "@calcom/testing/lib/bookingScenario/setupAndTe
 
 import { describe, expect, vi } from "vitest";
 
+import { handleRefundError } from "@calcom/features/bookings/lib/payment/handleRefundError";
 import { processPaymentRefund } from "@calcom/features/bookings/lib/payment/processPaymentRefund";
 import { BookingStatus } from "@calcom/prisma/enums";
+import prismock from "@calcom/testing/lib/__mocks__/prisma";
 import { test } from "@calcom/testing/lib/fixtures/fixtures";
 
 vi.mock("@calcom/features/bookings/lib/payment/processPaymentRefund", () => ({
   processPaymentRefund: vi.fn(),
+}));
+vi.mock("@calcom/features/bookings/lib/payment/handleRefundError", () => ({
+  handleRefundError: vi.fn(),
 }));
 
 describe("Cancel Booking", () => {
@@ -286,6 +291,70 @@ describe("Cancel Booking", () => {
     });
 
     expect(processPaymentRefund).toHaveBeenCalled();
+  });
+
+  test("Should still cancel and notify the organizer when the refund fails", async () => {
+    const handleCancelBooking = (await import("@calcom/features/bookings/lib/handleCancelBooking")).default;
+    const booker = getBooker({ email: "booker@example.com", name: "Booker" });
+    const organizer = getOrganizer({
+      name: "Organizer",
+      email: "organizer@example.com",
+      id: 101,
+      schedules: [TestData.schedules.IstWorkHours],
+    });
+    const uid = "r5Wv3eHgconAED2j4gcVhP";
+    const { dateString: plus1DateString } = getDate({ dateIncrement: 1 });
+
+    await createBookingScenario(
+      getScenarioData({
+        eventTypes: [{ id: 1, slotInterval: 30, length: 30, users: [{ id: 101 }] }],
+        payment: [
+          {
+            amount: 10000,
+            bookingId: 1021,
+            currency: "eur",
+            data: {},
+            externalId: "cs_test_refund_fails",
+            fee: 0,
+            refunded: false,
+            success: true,
+            uid: "payment-uid-1021",
+          },
+        ],
+        bookings: [
+          {
+            id: 1021,
+            uid,
+            eventTypeId: 1,
+            userId: 101,
+            responses: { email: booker.email, name: booker.name },
+            status: BookingStatus.ACCEPTED,
+            startTime: `${plus1DateString}T05:00:00.000Z`,
+            endTime: `${plus1DateString}T05:15:00.000Z`,
+            attendees: [{ timeZone: "Asia/Kolkata", email: booker.email }],
+          },
+        ],
+        organizer,
+      })
+    );
+    vi.mocked(processPaymentRefund).mockRejectedValueOnce(
+      new Error("Stripe refund of payment 1 failed (temporary error): no connection")
+    );
+
+    const result = await handleCancelBooking({
+      bookingData: { id: 1021, uid, cancelledBy: organizer.email, cancellationReason: "No reason" },
+    });
+
+    expect(result).toMatchObject({ success: true });
+    const cancelled = await prismock.booking.findUnique({ where: { id: 1021 } });
+    expect(cancelled?.status).toBe(BookingStatus.CANCELLED);
+    expect(handleRefundError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: "Stripe refund of payment 1 failed (temporary error): no connection",
+        paymentId: "payment-uid-1021",
+        event: expect.objectContaining({ uid }),
+      })
+    );
   });
 
   test("Should successfully cancel round robin team event when host is also an attendee with workflow emails", async () => {

@@ -2,20 +2,24 @@ import { BaseEmailHtml } from "../components";
 import type { OrganizerScheduledEmail } from "./OrganizerScheduledEmail";
 
 export const OrganizerPaymentRefundFailedEmail = (
-  props: React.ComponentProps<typeof OrganizerScheduledEmail>
+  props: React.ComponentProps<typeof OrganizerScheduledEmail> & { subject?: string }
 ) => {
   const t = props.calEvent.organizer.language.translate;
+  const attendeeName = props.calEvent.attendees[0].name;
 
   return (
     <BaseEmailHtml
       headerType="xCircle"
-      subject="refund_failed_subject"
+      subject={props.subject ?? t("a_refund_failed")}
       title={t("a_refund_failed")}
       callToAction={null}
       subtitle={
         <>
+          {t("refund_failed_payment_not_returned")}{" "}
+          {/* Locales name the attendee variable {{user}} or {{userName}}; pass both. */}
           {t("check_with_provider_and_user", {
-            user: props.calEvent.attendees[0].name,
+            user: attendeeName,
+            userName: attendeeName,
             interpolation: { escapeValue: false },
           })}
         </>
@@ -62,7 +66,7 @@ function RefundInformation(props: React.ComponentProps<typeof OrganizerPaymentRe
                 textAlign: "center",
                 color: "#494949",
               }}>
-              Payment {paymentInfo.id}
+              {t("payment")} {paymentInfo.id}
             </div>
           </td>
         </tr>

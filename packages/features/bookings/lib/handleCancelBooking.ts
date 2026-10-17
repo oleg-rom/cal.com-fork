@@ -16,6 +16,7 @@ import { getBookingEventHandlerService } from "@calcom/features/bookings/di/Book
 import EventManager from "@calcom/features/bookings/lib/EventManager";
 import { getCalEventResponses } from "@calcom/features/bookings/lib/getCalEventResponses";
 import { processNoShowFeeOnCancellation } from "@calcom/features/bookings/lib/payment/processNoShowFeeOnCancellation";
+import { handleRefundError } from "@calcom/features/bookings/lib/payment/handleRefundError";
 import { processPaymentRefund } from "@calcom/features/bookings/lib/payment/processPaymentRefund";
 import { getFeaturesRepository } from "@calcom/features/di/containers/FeaturesRepository";
 import { CreditService } from "@calcom/features/ee/billing/credit-service";
@@ -602,7 +603,14 @@ async function handler(input: CancelBookingInput, dependencies?: Dependencies) {
           teamId,
         });
       } catch (error) {
+        // The booking is still cancelled; the organizer is told the money was not returned.
         log.error(`Error processing payment refund for booking ${bookingToDelete.uid}:`, error);
+        const failedPayment = bookingToDelete.payment.find((payment) => payment.success && !payment.refunded);
+        await handleRefundError({
+          event: evt,
+          reason: error instanceof Error ? error.message : "unknown error",
+          paymentId: failedPayment?.uid ?? "",
+        });
       }
     } else if (bookingToDelete.payment.some((payment) => payment.paymentOption === "HOLD")) {
       try {

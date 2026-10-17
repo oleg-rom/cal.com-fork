@@ -176,4 +176,25 @@ describe("processPaymentRefund", () => {
     await processPaymentRefund({ booking: mockBooking, teamId: 1 });
     expect(handlePaymentRefund).not.toHaveBeenCalled();
   });
+  // The reject path (bookings confirm handler) awaits processPaymentRefund before marking the booking
+  // REJECTED, so these two cases decide whether a rejection goes ahead.
+  it("resolves when the refund is still processing, so a rejection can go ahead", async () => {
+    mockedGetPaymentAppData.mockReturnValueOnce({ ...mockAppData, refundPolicy: RefundPolicy.ALWAYS });
+    await prismock.app.create({ data: mockApp });
+    await prismock.credential.create({ data: mockCredential });
+    vi.mocked(handlePaymentRefund).mockResolvedValueOnce({ ...mockPayment[0], refunded: false });
+
+    await expect(processPaymentRefund({ booking: mockBooking, teamId: 1 })).resolves.toBeUndefined();
+  });
+
+  it("passes a failed refund on to the caller, so a rejection is not completed as if refunded", async () => {
+    mockedGetPaymentAppData.mockReturnValueOnce({ ...mockAppData, refundPolicy: RefundPolicy.ALWAYS });
+    await prismock.app.create({ data: mockApp });
+    await prismock.credential.create({ data: mockCredential });
+    vi.mocked(handlePaymentRefund).mockRejectedValueOnce(new Error("Stripe refund of payment 1 failed"));
+
+    await expect(processPaymentRefund({ booking: mockBooking, teamId: 1 })).rejects.toThrow(
+      "Stripe refund of payment 1 failed"
+    );
+  });
 });
