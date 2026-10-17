@@ -10,7 +10,6 @@ import { ErrorCode } from "@calcom/lib/errorCodes";
 import { ErrorWithCode } from "@calcom/lib/errors";
 import logger from "@calcom/lib/logger";
 import { safeStringify } from "@calcom/lib/safeStringify";
-import { getServerErrorFromUnknown } from "@calcom/lib/server/getServerErrorFromUnknown";
 import prisma from "@calcom/prisma";
 import type { Booking, Payment, PaymentOption, Prisma } from "@calcom/prisma/client";
 import type { EventTypeMetadata } from "@calcom/prisma/zod-utils";
@@ -19,6 +18,8 @@ import type { IAbstractPaymentService } from "@calcom/types/PaymentService";
 
 import { paymentOptionEnum } from "../zod";
 import { retrieveOrCreateStripeCustomerByEmail } from "./customer";
+import type { RefundOutcome } from "./refundPayment";
+import { isRetryableStripeError, refundPaymentIntent, resolvePaymentIntentId } from "./refundPayment";
 import type { StripeSetupIntentData } from "./server";
 
 const log = logger.getSubLogger({ prefix: ["payment-service:stripe"] });
@@ -31,6 +32,12 @@ export const stripeCredentialKeysSchema = z.object({
   default_currency: z.string(),
   stripe_publishable_key: z.string().optional(), // Optional, we use NEXT_PUBLIC_STRIPE_PUBLIC_KEY in direct mode
 });
+
+function withoutRefundFailure(data: Prisma.JsonValue): Prisma.JsonObject {
+  if (!data || typeof data !== "object" || Array.isArray(data)) return {};
+  const { refundFailure: _refundFailure, ...rest } = data as Prisma.JsonObject;
+  return rest;
+}
 
 class StripePaymentService implements IAbstractPaymentService {
   private stripe: Stripe;
@@ -371,27 +378,90 @@ class StripePaymentService implements IAbstractPaymentService {
       // refunded already, bail early as success without throwing an error.
       return payment;
     }
+
+    let outcome: RefundOutcome;
     try {
-      const refund = await this.stripe.refunds.create({
-        payment_intent: payment.externalId,
-      });
-
-      if (!refund || refund.status === "failed") {
-        throw new Error("Refund failed");
-      }
-
-      const updatedPayment = await prisma.payment.update({
-        where: {
-          id: payment.id,
-        },
-        data: {
-          refunded: true,
-        },
-      });
-      return updatedPayment;
+      const paymentIntentId = await resolvePaymentIntentId(this.stripe, payment);
+      outcome = paymentIntentId
+        ? await refundPaymentIntent(this.stripe, paymentIntentId, payment.uid)
+        : { status: "nothing_charged", paymentIntentId: null };
     } catch (e) {
-      const err = getServerErrorFromUnknown(e);
-      throw err;
+      const retryable = isRetryableStripeError(e);
+      const reason = e instanceof Error ? e.message : String(e);
+      log.error(
+        `Stripe: refund of payment ${payment.id} failed${retryable ? " (temporary error)" : ""}`,
+        safeStringify({ paymentId: payment.id, externalId: payment.externalId, reason })
+      );
+      // Recorded so the failure is visible on the booking; refunded stays false.
+      await prisma.payment
+        .updateMany({
+          where: { id: payment.id, refunded: false },
+          data: {
+            data: {
+              ...withoutRefundFailure(payment.data),
+              refundFailure: { reason, retryable, failedAt: new Date().toISOString() },
+            },
+          },
+        })
+        .catch((recordError: unknown) => {
+          log.error(
+            `Stripe: could not record refund failure of payment ${payment.id}`,
+            safeStringify(recordError)
+          );
+        });
+      throw new ErrorWithCode(
+        ErrorCode.PaymentRefundFailure,
+        `Stripe refund of payment ${payment.id} failed${retryable ? " (temporary error)" : ""}: ${reason}`,
+        { paymentId: payment.id, retryable }
+      );
+    }
+
+    if (outcome.status === "nothing_charged") {
+      // Nothing to send back; the payment is not marked refunded because no money moved.
+      log.info(`Stripe: payment ${payment.id} charged nothing, no refund needed`);
+      return payment;
+    }
+
+    // Only a refund Stripe reports as succeeded marks the payment refunded. A refund that is still
+    // processing is recorded as such; calling refund() again later re-checks it in Stripe.
+    const succeeded = outcome.status === "succeeded";
+    if (!succeeded) {
+      log.warn(
+        `Stripe: refund of payment ${payment.id} is ${outcome.status}`,
+        safeStringify({ refundIds: outcome.refundIds, amountInProgress: outcome.amountInProgress })
+      );
+    }
+    try {
+      return await prisma.payment.update({
+        where: { id: payment.id },
+        data: {
+          refunded: succeeded,
+          data: {
+            ...withoutRefundFailure(payment.data),
+            refund: {
+              status: outcome.status,
+              paymentIntentId: outcome.paymentIntentId,
+              refundIds: outcome.refundIds,
+              amountReceived: outcome.amountReceived,
+              amountSucceeded: outcome.amountSucceeded,
+              amountInProgress: outcome.amountInProgress,
+              recordedAt: new Date().toISOString(),
+            },
+          },
+        },
+      });
+    } catch (e) {
+      // The money moved in Stripe; only saving it failed. A repeat finds the refund in Stripe.
+      const reason = e instanceof Error ? e.message : String(e);
+      log.error(
+        `Stripe: refund of payment ${payment.id} is ${outcome.status} in Stripe but could not be saved`,
+        safeStringify({ paymentId: payment.id, refundIds: outcome.refundIds, reason })
+      );
+      throw new ErrorWithCode(
+        ErrorCode.PaymentRefundFailure,
+        `Stripe refund of payment ${payment.id} is ${outcome.status} in Stripe (${outcome.refundIds.join(", ")}), but saving the result failed`,
+        { paymentId: payment.id, retryable: true }
+      );
     }
   }
 
