@@ -31,6 +31,7 @@ import sendPayload from "@calcom/features/webhooks/lib/sendOrSchedulePayload";
 import type { EventTypeInfo } from "@calcom/features/webhooks/lib/sendPayload";
 import getOrgIdFromMemberOrTeamId from "@calcom/lib/getOrgIdFromMemberOrTeamId";
 import { getTeamIdFromEventType } from "@calcom/lib/getTeamIdFromEventType";
+import { ErrorWithCode } from "@calcom/lib/errors";
 import { HttpError } from "@calcom/lib/http-error";
 import { isPrismaObjOrUndefined } from "@calcom/lib/isPrismaObj";
 import { parseRecurringEvent } from "@calcom/lib/isRecurringEvent";
@@ -582,14 +583,21 @@ async function handler(input: CancelBookingInput, dependencies?: Dependencies) {
           teamId,
         });
       } catch (error) {
-        // The booking is still cancelled; the organizer is told the money was not returned.
         log.error(`Error processing payment refund for booking ${bookingToDelete.uid}:`, error);
-        const failedPayment = bookingToDelete.payment.find((payment) => payment.success && !payment.refunded);
-        await handleRefundError({
-          event: evt,
-          reason: error instanceof Error ? error.message : "unknown error",
-          paymentId: failedPayment?.uid ?? "",
-        });
+        // The booking is still cancelled; the organizer is told the money was not returned. Not when the
+        // refund is already in Stripe and only saving it failed: telling them to refund by hand would be wrong.
+        const refundIsInStripe =
+          error instanceof ErrorWithCode && error.data?.refundRequestedInStripe === true;
+        if (!refundIsInStripe) {
+          const failedPayment = bookingToDelete.payment.find(
+            (payment) => payment.success && !payment.refunded
+          );
+          await handleRefundError({
+            event: evt,
+            reason: error instanceof Error ? error.message : "unknown error",
+            paymentId: failedPayment?.uid ?? "",
+          });
+        }
       }
     } else if (bookingToDelete.payment.some((payment) => payment.paymentOption === "HOLD")) {
       try {
