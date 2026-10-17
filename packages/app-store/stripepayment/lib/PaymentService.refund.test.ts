@@ -199,7 +199,7 @@ describe("StripePaymentService.refund", () => {
     await expect(service().refund(7)).rejects.toMatchObject({
       code: ErrorCode.PaymentRefundFailure,
       message: expect.stringContaining("is succeeded in Stripe (re_1), but saving the result failed"),
-      data: { paymentId: 7, retryable: true },
+      data: { paymentId: 7, retryable: true, refundRequestedInStripe: true },
     });
     expect(mockPrisma.payment.updateMany).not.toHaveBeenCalled();
 
@@ -272,6 +272,7 @@ describe("StripePaymentService.refund", () => {
       code: ErrorCode.PaymentRefundFailure,
       data: { paymentId: 7, retryable: true },
     });
+    expect((error as ErrorWithCode).data).not.toHaveProperty("refundRequestedInStripe");
     expect((error as Error).message).toMatch(/temporary error/);
     expect(mockPrisma.payment.update).not.toHaveBeenCalled();
     expect(mockPrisma.payment.updateMany).toHaveBeenCalledWith({
