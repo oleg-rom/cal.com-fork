@@ -13,6 +13,7 @@ export enum ErrorCode {
   ChargeCardFailure = "couldnt_charge_card_error",
   // Thrown when collecting/verifying a payment method fails (e.g., card setup failed during HOLD payment flow)
   CollectCardFailure = "couldnt_collect_card_error",
+  PaymentRefundFailure = "payment_refund_failed_error",
   RequestBodyWithouEnd = "request_body_end_time_internal_error",
   AlreadySignedUpForBooking = "already_signed_up_for_this_booking_error",
   FixedHostsUnavailableForBooking = "fixed_hosts_unavailable_for_booking",
