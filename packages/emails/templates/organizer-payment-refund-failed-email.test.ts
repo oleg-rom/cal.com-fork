@@ -2,7 +2,7 @@
  * @vitest-environment node
  */
 
-import { getTranslation } from "@calcom/lib/server/i18n";
+import { getTranslation } from "@calcom/i18n/server";
 import type { CalendarEvent } from "@calcom/types/Calendar";
 import { describe, expect, it } from "vitest";
 
