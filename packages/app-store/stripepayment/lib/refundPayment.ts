@@ -54,10 +54,9 @@ export type RefundOutcome =
 export class StripeRefundError extends Error {
   constructor(
     message: string,
-    readonly retryable: boolean,
-    options?: { cause?: unknown }
+    readonly retryable: boolean
   ) {
-    super(message, options);
+    super(message);
     this.name = "StripeRefundError";
   }
 }
