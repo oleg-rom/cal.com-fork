@@ -19,6 +19,7 @@
   "reset_password_subject": "{{appName}}: інструкції зі скидання пароля",
   "verify_email_subject": "{{appName}}: подтвердите адрес эл. почты",
   "verify_email_subject_verifying_email": "{{appName}}: подтвердите адрес эл. почты",
+  "verify_email_subject_no_branding": "Підтвердіть адресу електронної пошти",
   "check_your_email": "Перевірте свою електронну пошту",
   "old_email_address": "Стара електронна адреса",
   "new_email_address": "Нова електронна адреса",

@@ -20,6 +20,7 @@
   "reset_password_subject": "{{appName}}: Anleitung zum Zurücksetzen des Passworts",
   "verify_email_subject": "{{appName}}: подтвердите адрес эл. почты",
   "verify_email_subject_verifying_email": "{{appName}}: подтвердите адрес эл. почты",
+  "verify_email_subject_no_branding": "Bestätigen Sie Ihre E-Mail-Adresse",
   "check_your_email": "Schauen Sie in Ihrem E-Mail-Postfach nach",
   "old_email_address": "Alte E-Mail-Adresse",
   "new_email_address": "Neue E-Mail-Adresse",
