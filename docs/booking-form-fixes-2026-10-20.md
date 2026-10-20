@@ -6,6 +6,10 @@ Base: upgrade/v6.2.0 at 1d23cd730b, containing deployed application revision 77d
 
 The malformed privacy acknowledgement URL was repaired through the Cal.com editor for the five active events: single, free, package4, package12, sozo. Required flags, phone, age, consent identifiers, prices, integration credentials and refund policies were preserved. No booking or payment was submitted. The corrected link was checked after reloading each event editor. Hidden legacy event types were outside this change.
 
+The existing 24-hour rescheduling restriction was also configured in the five active events: minimumRescheduleNotice=1440 and disableRescheduling=false (conditional restriction, not an always-on prohibition). Each setting was checked after reloading its editor. Cancellation and refund policies were not changed. The public free-consultation form was checked without submitting it. Code inspection shows that the server rescheduling service checks this notice for non-organizers and returns 403 inside the period; an actual client rescheduling request was not submitted.
+
+Editor caveat: entering a new number after choosing the notice radio can save the earlier value (60) instead. Entering 1440 before selecting the notice mode, then saving and reloading, preserved 1440. The stale callback in DisableReschedulingController remains a separate application issue; avoid assuming that the visible numeric input is the saved value.
+
 ## Application change (not deployed)
 
 Only the session host with both existing consent fields receives the override. Other hosts retain upstream behavior.
@@ -34,6 +38,6 @@ Still required, and not implemented by this presentation fix:
 3. Conditional, unchecked request to begin services within the 14-day withdrawal period, validated on the server, including delayed payments, rescheduling and packages. Choosing an early date or merely beginning the service must not be presented as automatic loss of the right.
 4. Record accepted document version/hash, exact consent text, locale and server timestamps alongside the booking; determine formation from acceptance plus successful payment.
 5. Deliver the accepted documents and withdrawal information in the confirmation email in durable form.
-6. Configure and test the existing 24-hour rescheduling restriction (minimumRescheduleNotice). The inspected single event had it unset. Explain that the management link is in the booking confirmation email. This branch does not change that setting.
+6. Add the customer-facing explanation that the management link is in the booking confirmation email, and verify a reschedule in an isolated test environment. The live 24-hour setting itself has now been configured separately through the editor.
 
 Do not mark the overall legal flow complete based on this PR.
