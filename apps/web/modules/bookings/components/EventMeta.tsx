@@ -1,7 +1,7 @@
 import { Timezone as PlatformTimezoneSelect } from "@calcom/atoms/timezone";
 import { useBookerStoreContext } from "@calcom/features/bookings/Booker/BookerStoreProvider";
-import { useBookerTime } from "@calcom/features/bookings/Booker/hooks/useBookerTime";
 import { fadeInUp } from "@calcom/features/bookings/Booker/config";
+import { useBookerTime } from "@calcom/features/bookings/Booker/hooks/useBookerTime";
 import type { Timezone } from "@calcom/features/bookings/Booker/types";
 import { FromToTime } from "@calcom/features/bookings/Booker/utils/dates";
 import { useTimePreferences } from "@calcom/features/bookings/lib";
@@ -258,10 +258,7 @@ export const EventMeta = ({
             </EventMetaBlock>
             {/* Custom timezone hint for INGA LIFE */}
             <div className="text-subtle mt-4 rounded-md bg-amber-50 p-3 text-xs dark:bg-amber-900/20">
-              <p>
-                Если Ваш часовой пояс отличается от часового пояса Германии, выберите соответствующий часовой
-                пояс, нажав на значок глобуса выше, чтобы время консультации отображалось по местному времени.
-              </p>
+              <p>{t("inga_booking_timezone_hint")}</p>
             </div>
             {bookerState === "booking" && eventTotalSeats && bookingSeatAttendeesQty ? (
               <EventMetaBlock icon="user" className={`${colorClass}`}>
