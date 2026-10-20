@@ -1,11 +1,9 @@
-import type { TFunction } from "i18next";
-import Link from "next/link";
-import { useMemo, useState } from "react";
-import type { FieldError } from "react-hook-form";
-
 import { getPaymentAppData } from "@calcom/app-store/_utils/payments/getPaymentAppData";
 import { useIsPlatformBookerEmbed } from "@calcom/atoms/hooks/useIsPlatformBookerEmbed";
 import { useBookerStoreContext } from "@calcom/features/bookings/Booker/BookerStoreProvider";
+import { useBookerTime } from "@calcom/features/bookings/Booker/hooks/useBookerTime";
+import type { UseBookingFormReturnType } from "@calcom/features/bookings/Booker/hooks/useBookingForm";
+import { formatEventFromTime } from "@calcom/features/bookings/Booker/utils/dates";
 import type { BookerEvent } from "@calcom/features/bookings/types";
 import ServerTrans from "@calcom/lib/components/ServerTrans";
 import { APP_NAME, WEBSITE_PRIVACY_POLICY_URL, WEBSITE_TERMS_URL } from "@calcom/lib/constants";
@@ -16,12 +14,13 @@ import { Alert } from "@calcom/ui/components/alert";
 import { Button } from "@calcom/ui/components/button";
 import { EmptyScreen } from "@calcom/ui/components/empty-screen";
 import { Form } from "@calcom/ui/components/form";
-
-import { formatEventFromTime } from "@calcom/features/bookings/Booker/utils/dates";
-import { useBookerTime } from "@calcom/features/bookings/Booker/hooks/useBookerTime";
-import type { UseBookingFormReturnType } from "@calcom/features/bookings/Booker/hooks/useBookingForm";
+import type { TFunction } from "i18next";
+import Link from "next/link";
+import { useMemo, useState } from "react";
+import type { FieldError } from "react-hook-form";
 import type { IUseBookingErrors, IUseBookingLoadingStates } from "../../hooks/useBookings";
 import { BookingFields } from "./BookingFields";
+import { getCounselingPrivacyUrl, isCounselingForm } from "./counselingFields";
 import { FormSkeleton } from "./Skeleton";
 
 type BookEventFormProps = {
@@ -112,6 +111,7 @@ export const BookEventForm = ({
     return <Alert severity="warning" message={t("error_booking_event")} />;
   }
 
+  const isCounseling = isCounselingForm(username, eventType.bookingFields);
   const watchedCfToken = bookingForm.watch("cfToken");
 
   return (
@@ -129,6 +129,7 @@ export const BookEventForm = ({
         handleSubmit={onSubmit}
         noValidate>
         <BookingFields
+          isCounseling={isCounseling}
           isDynamicGroupBooking={!!(username && username.indexOf("+") > -1)}
           fields={eventType.bookingFields}
           locations={eventType.locations}
@@ -179,7 +180,21 @@ export const BookEventForm = ({
           </div>
         ) : null}
 
-        {!isPlatform && (
+        {isCounseling && (
+          <div className="my-3 w-full space-y-2 text-xs text-subtle">
+            {isPaidEvent && <p>{t("inga_booking_vat_notice")}</p>}
+            <p>
+              <Link
+                className="text-emphasis hover:underline"
+                href={getCounselingPrivacyUrl(i18n.language)}
+                target="_blank"
+                rel="noopener noreferrer">
+                {t("privacy_policy")}
+              </Link>
+            </p>
+          </div>
+        )}
+        {!isPlatform && !isCounseling && (
           <div className="my-3 w-full text-xs text-subtle">
             <ServerTrans
               t={t}
@@ -205,7 +220,7 @@ export const BookEventForm = ({
           </div>
         )}
 
-        {isPlatformBookerEmbed && (
+        {isPlatformBookerEmbed && !isCounseling && (
           <div className="my-3 w-full text-xs text-subtle">
             {t("proceeding_agreement")}{" "}
             <Link

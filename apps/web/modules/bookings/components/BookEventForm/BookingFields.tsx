@@ -1,20 +1,19 @@
-import { useMemo, useRef } from "react";
-import { useFormContext } from "react-hook-form";
-import { z } from "zod";
-
 import type { LocationObject } from "@calcom/app-store/locations";
-import { getOrganizerInputLocationTypes } from "@calcom/app-store/locations";
-import { DefaultEventLocationTypeEnum } from "@calcom/app-store/locations";
+import { DefaultEventLocationTypeEnum, getOrganizerInputLocationTypes } from "@calcom/app-store/locations";
 import { useBookerStore } from "@calcom/features/bookings/Booker/store";
 import type { GetBookingType } from "@calcom/features/bookings/lib/get-booking";
 import getLocationOptionsForSelect from "@calcom/features/bookings/lib/getLocationOptionsForSelect";
-import { FormBuilderField } from "@calcom/web/modules/form-builder/components/FormBuilderField";
-import { fieldTypesConfigMap } from "@calcom/features/form-builder/fieldTypes";
 import { fieldsThatSupportLabelAsSafeHtml } from "@calcom/features/form-builder/fieldsThatSupportLabelAsSafeHtml";
+import { fieldTypesConfigMap } from "@calcom/features/form-builder/fieldTypes";
 import { SystemField } from "@calcom/lib/bookings/SystemField";
 import { useLocale } from "@calcom/lib/hooks/useLocale";
 import { markdownToSafeHTML } from "@calcom/lib/markdownToSafeHTML";
 import type { RouterOutputs } from "@calcom/trpc/react";
+import { FormBuilderField } from "@calcom/web/modules/form-builder/components/FormBuilderField";
+import { useMemo, useRef } from "react";
+import { useFormContext } from "react-hook-form";
+import { z } from "zod";
+import { getCounselingFieldLabel } from "./counselingFields";
 
 type TouchedFields = {
   responses?: Record<string, boolean>;
@@ -27,6 +26,7 @@ const PhoneLocationSchema = z.object({
 });
 export const BookingFields = ({
   fields,
+  isCounseling = false,
   locations,
   rescheduleUid,
   isDynamicGroupBooking,
@@ -35,6 +35,7 @@ export const BookingFields = ({
   paymentCurrency = "USD",
 }: {
   fields: Fields;
+  isCounseling?: boolean;
   locations: LocationObject[];
   rescheduleUid?: string;
   bookingData?: GetBookingType | null;
@@ -129,7 +130,17 @@ export const BookingFields = ({
     // TODO: It might make sense to extract this logic into BookingFields config, that would allow to quickly configure system fields and their editability in fresh booking and reschedule booking view
     // The logic here intends to make modifications to booking fields based on the way we want to specifically show Booking Form
     <div>
-      {fields.map((field, index) => {
+      {fields.map((originalField, index) => {
+        const label = isCounseling ? getCounselingFieldLabel(originalField, t, i18n.language) : undefined;
+        const field = label
+          ? {
+              ...originalField,
+              label,
+              labelAsSafeHtml: fieldsThatSupportLabelAsSafeHtml.includes(originalField.type)
+                ? markdownToSafeHTML(label)
+                : undefined,
+            }
+          : originalField;
         // Don't Display Location field in case of instant meeting as only Cal Video is supported
         if (isInstantMeeting && field.name === "location") return null;
 

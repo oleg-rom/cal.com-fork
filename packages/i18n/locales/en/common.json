@@ -4684,5 +4684,10 @@
   "paypal_step_7": "You should be all set up after this.",
   "dashboard": "dashboard",
   "paypal_webhook_reminder": "Our integration creates a specific webhook on your PayPal account that we use to report back transactions to our system. If you delete this webhook, we will not be able to report back and you should uninstall and install the app again for this to work properly. Uninstalling the app won't delete your current event type price/currency configuration but you will not be able to receive bookings.",
+  "inga_booking_age": "Your age",
+  "inga_booking_request": "Briefly state the topic of the consultation, without details about health, traumatic experiences, religious beliefs or intimate life. You can discuss the details during the meeting.",
+  "inga_booking_privacy_acknowledgement": "I have read the [Privacy Policy]({{privacyUrl}}) and the information about the processing of my personal data when booking and attending consultations.",
+  "inga_booking_sensitive_data_consent": "I give Inga Romanenko my explicit consent to process information I voluntarily share during consultations, including information about health, religious beliefs, family circumstances and sex life, if relevant to my request. I choose what to share and am not obliged to discuss these topics. Processing is limited to what is necessary to conduct consultations and keep professional notes. Without this consent, consultations in the chosen format are not possible. I may withdraw consent at any time by contacting [privacy@inga.life](mailto:privacy@inga.life); this does not affect the lawfulness of processing before withdrawal. See the [Privacy Policy]({{privacyUrl}}) for details.",
+  "inga_booking_vat_notice": "The price is shown excluding VAT. Where applicable, VAT will be added at checkout. Stripe will show the final total before you confirm payment.",
   "ADD_NEW_STRINGS_ABOVE_THIS_LINE_TO_PREVENT_MERGE_CONFLICTS": "↑↑↑↑↑↑↑↑↑↑↑↑↑ Add your new strings above here ↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑↑"
 }
